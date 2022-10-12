@@ -261,3 +261,26 @@ ifndef(`kernel_manage_perf_event',`
         allow $1 self:perf_event manage_perf_event_perms;
     ')
 ')
+
+#######################################
+## <summary>
+##      Watch all directories in the path for log directories.
+## </summary>
+## <param name="domain">
+##      <summary>
+##      Domain allowed access.
+##      </summary>
+## </param>
+#
+ifndef(`logging_watch_all_log_dirs_path',`
+    interface(`logging_watch_all_log_dirs_path',`
+        gen_require(`
+            attribute logfile;
+        ')
+
+        files_watch_root_dirs($1)
+        files_search_var($1)
+        files_watch_var_dirs($1)
+        allow $1 logfile:dir { search_dir_perms watch_dir_perms };
+    ')
+')

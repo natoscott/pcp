@@ -191,7 +191,7 @@ CFGMETERS = $(patsubst %,pcp/meters/%,$(METERS))
 CFGCOLUMNS = $(patsubst %,pcp/columns/%,$(COLUMNS))
 CFGSCREENS = $(patsubst %,pcp/screens/%,$(SCREENS))
 
-CFGXFILES = $(CFGMETERS) $(CFGCOLUMNS)
+CFGXFILES = $(CFGMETERS) $(CFGCOLUMNS) $(CFGSCREENS)
 TOPXFILES = $(TOPCFILES) $(TOPHFILES) $(DOCFILES)
 SUBXFILES = $(SUBCFILES) $(SUBHFILES)
 CFILES = $(TOPCFILES) $(SUBCFILES)
@@ -245,7 +245,7 @@ $(SUBXFILES):
 	$(LN_S) -f $(TOPDIR)/../vendor/github.com/htop-dev/htop/$@ $@
 
 $(CFGXFILES):
-	mkdir -p pcp/columns pcp/meters
+	mkdir -p pcp/columns pcp/meters pcp/screens
 	$(LN_S) -f $(TOPDIR)/../../vendor/github.com/htop-dev/htop/$@ $@
 
 $(DISTLINKS):	$(CMDTARGET)

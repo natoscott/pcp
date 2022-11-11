@@ -19,7 +19,7 @@ csystem.metric = 1000 * rate(cgroup.cpu.stat.system)
 cusage.heading = CPU%
 cusage.caption = CPU Utilization
 cusage.width = 6
-cusage.metric = 100 * (rate(cgroup.cpu.stat.usage) / hinv.ncpu)
+cusage.metric = 100 * (rate(cgroup.cpu.stat.usage) / 1000 / hinv.ncpu)
 
 ## different pmInDom, argh
 #memory.heading = MEM
@@ -30,7 +30,7 @@ cusage.metric = 100 * (rate(cgroup.cpu.stat.usage) / hinv.ncpu)
 cpupressure.heading = CPU-PSI
 cpupressure.caption = CPU Pressure Stall Information
 cpupressure.width = -6
-cpupressure.metric = 1000 * rate (cgroup.pressure.cpu.some.total)
+cpupressure.metric = 1000 * rate(cgroup.pressure.cpu.some.total)
 
 mempressure.heading = MEM-PSI
 mempressure.caption = Memory Pressure Stall Information

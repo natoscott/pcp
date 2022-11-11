@@ -1678,6 +1678,7 @@ struct perf_event {
 	int pending_wakeup;
 	int pending_kill;
 	int pending_disable;
+	long unsigned int pending_addr;
 	struct irq_work pending;
 	atomic_t event_limit;
 	struct perf_addr_filters_head addr_filters;
@@ -1693,6 +1694,7 @@ struct perf_event {
 	void *overflow_handler_context;
 	perf_overflow_handler_t orig_overflow_handler;
 	struct bpf_prog *prog;
+	u64 bpf_cookie;
 	struct trace_event_call *tp_event;
 	struct event_filter *filter;
 	struct ftrace_ops ftrace_ops;
@@ -26070,7 +26072,10 @@ enum bpf_link_type {
 	BPF_LINK_TYPE_ITER = 4,
 	BPF_LINK_TYPE_NETNS = 5,
 	BPF_LINK_TYPE_XDP = 6,
-	MAX_BPF_LINK_TYPE = 7,
+	BPF_LINK_TYPE_PERF_EVENT = 7,
+	BPF_LINK_TYPE_KPROBE_MULTI = 8,
+	BPF_LINK_TYPE_STRUCT_OPS = 9,
+	MAX_BPF_LINK_TYPE = 10,
 };
 
 struct bpf_link_info {
@@ -30361,6 +30366,11 @@ struct bpf_tracing_link {
 struct bpf_raw_tp_link {
 	struct bpf_link link;
 	struct bpf_raw_event_map *btp;
+};
+
+struct bpf_perf_link {
+	struct bpf_link link;
+	struct file *perf_file;
 };
 
 struct btf_member {

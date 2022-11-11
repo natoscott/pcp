@@ -184,7 +184,7 @@ SUBHFILES = \
 	pcp/ProcessField.h \
 
 DOCFILES = AUTHORS pcp-htop.5.in
-SCREENS = biosnoop cgroups execsnoop exitsnoop filesys opensnoop
+SCREENS = biosnoop cgroups cgroupsio execsnoop exitsnoop filesys opensnoop
 COLUMNS = container delayacct fdcount guest memory sched swap tcp udp wchan
 METERS = entropy freespace ipc locks memcache mysql postfix redis tcp
 CFGMETERS = $(patsubst %,pcp/meters/%,$(METERS))

@@ -47,8 +47,11 @@ TOPCFILES = \
 	DisplayOptionsPanel.c \
 	DynamicColumn.c \
 	DynamicMeter.c \
+	DynamicScreen.c \
 	EnvScreen.c \
 	FunctionBar.c \
+	GenericData.c \
+	GenericDataList.c \
 	Hashtable.c \
 	Header.c \
 	HeaderOptionsPanel.c \
@@ -91,6 +94,9 @@ SUBCFILES = \
 	zfs/ZfsCompressedArcMeter.c \
 	pcp/PCPDynamicColumn.c \
 	pcp/PCPDynamicMeter.c \
+	pcp/PCPDynamicScreen.c \
+	pcp/PCPGenericData.c \
+	pcp/PCPGenericDataList.c \
 	pcp/PCPMetric.c \
 	pcp/PCPProcess.c \
 	pcp/PCPProcessList.c \
@@ -116,8 +122,11 @@ TOPHFILES = \
 	DisplayOptionsPanel.h \
 	DynamicColumn.h \
 	DynamicMeter.h \
+	DynamicScreen.h \
 	EnvScreen.h \
 	FunctionBar.h \
+	GenericData.h \
+	GenericDataList.h \
 	Hashtable.h \
 	Header.h \
 	HeaderLayout.h \
@@ -165,6 +174,9 @@ SUBHFILES = \
 	zfs/ZfsCompressedArcMeter.h \
 	pcp/PCPDynamicColumn.h \
 	pcp/PCPDynamicMeter.h \
+	pcp/PCPDynamicScreen.h \
+	pcp/PCPGenericData.h \
+	pcp/PCPGenericDataList.h \
 	pcp/PCPMetric.h \
 	pcp/PCPProcess.h \
 	pcp/PCPProcessList.h \
@@ -172,10 +184,12 @@ SUBHFILES = \
 	pcp/ProcessField.h \
 
 DOCFILES = AUTHORS pcp-htop.5.in
+SCREENS = biosnoop cgroups execsnoop exitsnoop filesys opensnoop
 COLUMNS = container delayacct fdcount guest memory sched swap tcp udp wchan
 METERS = entropy freespace ipc locks memcache mysql postfix redis tcp
 CFGMETERS = $(patsubst %,pcp/meters/%,$(METERS))
 CFGCOLUMNS = $(patsubst %,pcp/columns/%,$(COLUMNS))
+CFGSCREENS = $(patsubst %,pcp/screens/%,$(SCREENS))
 
 CFGXFILES = $(CFGMETERS) $(CFGCOLUMNS)
 TOPXFILES = $(TOPCFILES) $(TOPHFILES) $(DOCFILES)
@@ -200,14 +214,19 @@ install: default
 	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/htop
 	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/htop/meters
 	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/htop/columns
+	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/htop/screens
 	$(INSTALL) -m 755 -d $(PCP_SHARE_DIR)/htop
 	$(INSTALL) -m 755 -d $(PCP_SHARE_DIR)/htop/meters
 	@for m in $(METERS); do \
 	    $(INSTALL) -m 644 pcp/meters/$$m $(PCP_SHARE_DIR)/htop/meters/$$m; \
 	done
-	$(INSTALL) -m 755 -d $(PCP_SHARE_DIR)/htop/meters
+	$(INSTALL) -m 755 -d $(PCP_SHARE_DIR)/htop/columns
 	@for c in $(COLUMNS); do \
 	    $(INSTALL) -m 644 pcp/columns/$$c $(PCP_SHARE_DIR)/htop/columns/$$c; \
+	done
+	$(INSTALL) -m 755 -d $(PCP_SHARE_DIR)/htop/screens
+	@for c in $(SCREENS); do \
+	    $(INSTALL) -m 644 pcp/screens/$$c $(PCP_SHARE_DIR)/htop/screens/$$c; \
 	done
 else
 build-me:

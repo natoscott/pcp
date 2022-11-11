@@ -10,6 +10,7 @@ in the source distribution for its full text.
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -285,6 +286,7 @@ ScreenSettings* Settings_newScreen(Settings* this, const ScreenDefaults* default
       .treeView = false,
       .treeViewAlwaysByPID = false,
       .allBranchesCollapsed = false,
+      .generic = false,
    };
 
    ScreenSettings_readFields(ss, this->dynamicColumns, defaults->columns);
@@ -366,9 +368,11 @@ static bool Settings_read(Settings* this, const char* fileName, unsigned int ini
          screen = Settings_defaultScreens(this);
          screen->treeDirection = atoi(option[1]);
       } else if (String_eq(option[0], "tree_view") && this->config_version <= 2) {
-         // old (no screen) naming also supported for backwards compatibility
          screen = Settings_defaultScreens(this);
          screen->treeView = atoi(option[1]);
+      } else if (String_eq(option[0], "generic_screen") && this->config_version <= 2) {
+         screen = Settings_defaultScreens(this);
+         screen->generic = atoi(option[1]);
       } else if (String_eq(option[0], "tree_view_always_by_pid") && this->config_version <= 2) {
          // old (no screen) naming also supported for backwards compatibility
          screen = Settings_defaultScreens(this);
@@ -381,6 +385,8 @@ static bool Settings_read(Settings* this, const char* fileName, unsigned int ini
          this->hideKernelThreads = atoi(option[1]);
       } else if (String_eq(option[0], "hide_userland_threads")) {
          this->hideUserlandThreads = atoi(option[1]);
+      } else if (String_eq(option[0], "hide_running_in_container")) {
+         this->hideRunningInContainer = atoi(option[1]);
       } else if (String_eq(option[0], "shadow_other_users")) {
          this->shadowOtherUsers = atoi(option[1]);
       } else if (String_eq(option[0], "show_thread_names")) {
@@ -475,7 +481,7 @@ static bool Settings_read(Settings* this, const char* fileName, unsigned int ini
          this->topologyAffinity = !!atoi(option[1]);
       #endif
       } else if (strncmp(option[0], "screen:", 7) == 0) {
-         screen = Settings_newScreen(this, &(const ScreenDefaults){ .name = option[0] + 7, .columns = option[1] });
+         screen = Settings_newScreen(this, &(const ScreenDefaults) { .name = option[0] + 7, .columns = option[1] });
       } else if (String_eq(option[0], ".sort_key")) {
          if (screen)
             screen->sortKey = toFieldIndex(this->dynamicColumns, option[1]);
@@ -491,6 +497,9 @@ static bool Settings_read(Settings* this, const char* fileName, unsigned int ini
       } else if (String_eq(option[0], ".tree_view")) {
          if (screen)
             screen->treeView = atoi(option[1]);
+      } else if (String_eq(option[0], ".generic_screen")) {
+         if (screen)
+            screen->generic = atoi(option[1]);
       } else if (String_eq(option[0], ".tree_view_always_by_pid")) {
          if (screen)
             screen->treeViewAlwaysByPID = atoi(option[1]);
@@ -575,6 +584,7 @@ int Settings_write(const Settings* this, bool onCrash) {
    fprintf(fd, "fields="); writeFields(fd, this->screens[0]->fields, this->dynamicColumns, false, separator);
    printSettingInteger("hide_kernel_threads", this->hideKernelThreads);
    printSettingInteger("hide_userland_threads", this->hideUserlandThreads);
+   printSettingInteger("hide_running_in_container", this->hideRunningInContainer);
    printSettingInteger("shadow_other_users", this->shadowOtherUsers);
    printSettingInteger("show_thread_names", this->showThreadNames);
    printSettingInteger("show_program_path", this->showProgramPath);
@@ -628,6 +638,8 @@ int Settings_write(const Settings* this, bool onCrash) {
    printSettingInteger("all_branches_collapsed", this->screens[0]->allBranchesCollapsed);
 
    for (unsigned int i = 0; i < this->nScreens; i++) {
+      if (this->screens[i]->generic)
+         continue;
       ScreenSettings* ss = this->screens[i];
       fprintf(fd, "screen:%s=", ss->name);
       writeFields(fd, ss->fields, this->dynamicColumns, true, separator);
@@ -638,6 +650,7 @@ int Settings_write(const Settings* this, bool onCrash) {
       printSettingInteger(".sort_direction", ss->direction);
       printSettingInteger(".tree_sort_direction", ss->treeDirection);
       printSettingInteger(".all_branches_collapsed", ss->allBranchesCollapsed);
+      printSettingInteger(".generic_screen", ss->generic);
    }
 
    #undef printSettingString
@@ -668,6 +681,7 @@ Settings* Settings_new(unsigned int initialCpuCount, Hashtable* dynamicColumns) 
    this->showThreadNames = false;
    this->hideKernelThreads = true;
    this->hideUserlandThreads = false;
+   this->hideRunningInContainer = false;
    this->highlightBaseName = false;
    this->highlightDeletedExe = true;
    this->highlightMegabytes = true;
@@ -702,9 +716,10 @@ Settings* Settings_new(unsigned int initialCpuCount, Hashtable* dynamicColumns) 
       this->filename = xStrdup(rcfile);
    } else {
       const char* home = getenv("HOME");
-      if (!home)
-         home = "";
-
+      if (!home) {
+         const struct passwd* pw = getpwuid(getuid());
+         home = pw ? pw->pw_dir : "";
+      }
       const char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
       char* configDir = NULL;
       char* htopDir = NULL;
@@ -761,6 +776,8 @@ Settings* Settings_new(unsigned int initialCpuCount, Hashtable* dynamicColumns) 
 
    this->ssIndex = 0;
    this->ss = this->screens[this->ssIndex];
+
+   this->lastUpdate = 1;
 
    return this;
 }

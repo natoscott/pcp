@@ -38,6 +38,7 @@ in the source distribution for its full text.
 #include "ClockMeter.h"
 #include "DateMeter.h"
 #include "DateTimeMeter.h"
+#include "GenericDataList.h"
 #include "HostnameMeter.h"
 #include "LoadAverageMeter.h"
 #include "Macros.h"
@@ -351,7 +352,7 @@ FileLocks_ProcessData* Platform_getProcessLocks(pid_t pid) {
 
 bool Platform_getDiskIO(DiskIOData* data) {
    const int mib[] = { CTL_HW, HW_IOSTATS, sizeof(struct io_sysctl) };
-   struct io_sysctl *iostats = NULL;
+   struct io_sysctl* iostats = NULL;
    size_t size = 0;
 
    for (int retry = 3; retry > 0; retry--) {
@@ -513,3 +514,11 @@ error:
    if (fd != -1)
       close(fd);
 }
+
+void GenericDataList_goThroughEntries(ATTR_UNUSED GenericDataList* super, ATTR_UNUSED bool pauseUpdate) { return; }
+
+void GenericDataList_removePlatformList(ATTR_UNUSED GenericDataList* gl) { return; }
+
+GenericDataList* GenericDataList_addPlatformList(ATTR_UNUSED GenericDataList* super) {return NULL; }
+
+void GenericData_delete(ATTR_UNUSED Object* cast) { return; }

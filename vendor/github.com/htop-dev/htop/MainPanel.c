@@ -70,7 +70,7 @@ static HandlerResult MainPanel_eventHandler(Panel* super, int ch) {
       needReset = false;
    #endif
    if (needReset)
-      this->state->hideProcessSelection = false;
+      this->state->hideSelection = false;
 
    Settings* settings = this->state->settings;
    ScreenSettings* ss = settings->ss;
@@ -107,7 +107,7 @@ static HandlerResult MainPanel_eventHandler(Panel* super, int ch) {
       }
       result = HANDLED;
    } else if (ch == 27) {
-      this->state->hideProcessSelection = true;
+      this->state->hideSelection = true;
       return HANDLED;
    } else if (ch != ERR && ch > 0 && ch < KEY_MAX && this->keys[ch]) {
       reaction |= (this->keys[ch])(this->state);
@@ -122,28 +122,28 @@ static HandlerResult MainPanel_eventHandler(Panel* super, int ch) {
       }
    }
 
-   if (reaction & HTOP_REDRAW_BAR) {
+   if ((reaction & HTOP_REDRAW_BAR) == HTOP_REDRAW_BAR) {
       MainPanel_updateLabels(this, settings->ss->treeView, this->state->pl->incFilter);
    }
-   if (reaction & HTOP_RESIZE) {
+   if ((reaction & HTOP_RESIZE) == HTOP_RESIZE) {
       result |= RESIZE;
    }
-   if (reaction & HTOP_UPDATE_PANELHDR) {
+   if ((reaction & HTOP_UPDATE_PANELHDR) == HTOP_UPDATE_PANELHDR) {
       result |= REDRAW;
    }
-   if (reaction & HTOP_REFRESH) {
+   if ((reaction & HTOP_REFRESH) == HTOP_REFRESH) {
       result |= REFRESH;
    }
-   if (reaction & HTOP_RECALCULATE) {
+   if ((reaction & HTOP_RECALCULATE) == HTOP_RECALCULATE) {
       result |= RESCAN;
    }
-   if (reaction & HTOP_SAVE_SETTINGS) {
+   if ((reaction & HTOP_SAVE_SETTINGS) == HTOP_SAVE_SETTINGS) {
       this->state->settings->changed = true;
    }
-   if (reaction & HTOP_QUIT) {
+   if ((reaction & HTOP_QUIT) == HTOP_QUIT) {
       return BREAK_LOOP;
    }
-   if (!(reaction & HTOP_KEEP_FOLLOWING)) {
+   if ((reaction & HTOP_KEEP_FOLLOWING) != HTOP_KEEP_FOLLOWING) {
       this->state->pl->following = -1;
       Panel_setSelectionColor(super, PANEL_SELECTION_FOCUS);
    }
@@ -190,7 +190,7 @@ static void MainPanel_drawFunctionBar(Panel* super, bool hideFunctionBar) {
       return;
 
    IncSet_drawBar(this->inc, CRT_colors[FUNCTION_BAR]);
-   if (this->state->pauseProcessUpdate) {
+   if (this->state->pauseUpdate) {
       FunctionBar_append("PAUSED", CRT_colors[PAUSED]);
    }
 }
@@ -210,7 +210,7 @@ const PanelClass MainPanel_class = {
    .printHeader = MainPanel_printHeader
 };
 
-MainPanel* MainPanel_new() {
+MainPanel* MainPanel_new(void) {
    MainPanel* this = AllocThis(MainPanel);
    Panel_init((Panel*) this, 1, 1, 1, 1, Class(Process), false, FunctionBar_new(Settings_isReadonly() ? MainFunctions_ro : MainFunctions, NULL, NULL));
    this->keys = xCalloc(KEY_MAX, sizeof(Htop_Action));

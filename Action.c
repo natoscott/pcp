@@ -221,6 +221,11 @@ static Htop_Reaction actionToggleUserlandThreads(State* st) {
    return HTOP_RECALCULATE | HTOP_SAVE_SETTINGS | HTOP_KEEP_FOLLOWING;
 }
 
+static Htop_Reaction actionToggleRunningInContainer(State* st) {
+   st->settings->hideRunningInContainer = !st->settings->hideRunningInContainer;
+   return HTOP_RECALCULATE | HTOP_SAVE_SETTINGS | HTOP_KEEP_FOLLOWING;
+}
+
 static Htop_Reaction actionToggleProgramPath(State* st) {
    st->settings->showProgramPath = !st->settings->showProgramPath;
    return HTOP_REFRESH | HTOP_SAVE_SETTINGS;
@@ -238,6 +243,11 @@ static Htop_Reaction actionToggleTreeView(State* st) {
    if (!ss->allBranchesCollapsed)
       ProcessList_expandTree(st->pl);
    return HTOP_REFRESH | HTOP_SAVE_SETTINGS | HTOP_KEEP_FOLLOWING | HTOP_REDRAW_BAR | HTOP_UPDATE_PANELHDR;
+}
+
+static Htop_Reaction actionToggleHideMeters(State* st) {
+   st->hideMeters = !st->hideMeters;
+   return HTOP_RESIZE | HTOP_KEEP_FOLLOWING;
 }
 
 static Htop_Reaction actionExpandOrCollapseAllBranches(State* st) {
@@ -289,6 +299,9 @@ static Htop_Reaction actionInvertSortOrder(State* st) {
 }
 
 static Htop_Reaction actionExpandOrCollapse(State* st) {
+   if (!st->settings->ss->treeView)
+      return HTOP_OK;
+
    bool changed = expandCollapse((Panel*)st->mainPanel);
    return changed ? HTOP_RECALCULATE : HTOP_OK;
 }
@@ -312,7 +325,7 @@ static Htop_Reaction actionNextScreen(State* st) {
       settings->ssIndex = 0;
    }
    settings->ss = settings->screens[settings->ssIndex];
-   return HTOP_REFRESH;
+   return HTOP_UPDATE_PANELHDR | HTOP_REFRESH;
 }
 
 static Htop_Reaction actionPrevScreen(State* st) {
@@ -323,7 +336,7 @@ static Htop_Reaction actionPrevScreen(State* st) {
       settings->ssIndex--;
    }
    settings->ss = settings->screens[settings->ssIndex];
-   return HTOP_REFRESH;
+   return HTOP_UPDATE_PANELHDR | HTOP_REFRESH;
 }
 
 Htop_Reaction Action_setScreenTab(Settings* settings, int x) {
@@ -337,7 +350,7 @@ Htop_Reaction Action_setScreenTab(Settings* settings, int x) {
       if (x <= s + len + 1) {
          settings->ssIndex = i;
          settings->ss = settings->screens[i];
-         return HTOP_REFRESH;
+         return HTOP_UPDATE_PANELHDR | HTOP_REFRESH;
       }
       s += len + 3;
    }
@@ -496,8 +509,8 @@ static Htop_Reaction actionRedraw(ATTR_UNUSED State* st) {
    return HTOP_REFRESH | HTOP_REDRAW_BAR;
 }
 
-static Htop_Reaction actionTogglePauseProcessUpdate(State* st) {
-   st->pauseProcessUpdate = !st->pauseProcessUpdate;
+static Htop_Reaction actionTogglePauseUpdate(State* st) {
+   st->pauseUpdate = !st->pauseUpdate;
    return HTOP_REFRESH | HTOP_REDRAW_BAR;
 }
 
@@ -506,6 +519,7 @@ static const struct {
    bool roInactive;
    const char* info;
 } helpLeft[] = {
+   { .key = "      #: ",  .roInactive = false, .info = "hide/show header meters" },
    { .key = "    Tab: ",  .roInactive = false, .info = "switch to next screen tab" },
    { .key = " Arrows: ",  .roInactive = false, .info = "scroll process list" },
    { .key = " Digits: ",  .roInactive = false, .info = "incremental PID search" },
@@ -732,6 +746,7 @@ static Htop_Reaction actionShowCommandScreen(State* st) {
 
 void Action_setBindings(Htop_Action* keys) {
    keys[' '] = actionTag;
+   keys['#'] = actionToggleHideMeters;
    keys['*'] = actionExpandOrCollapseAllBranches;
    keys['+'] = actionExpandOrCollapse;
    keys[','] = actionSetSortColumn;
@@ -749,11 +764,12 @@ void Action_setBindings(Htop_Action* keys) {
    keys['K'] = actionToggleKernelThreads;
    keys['M'] = actionSortByMemory;
    keys['N'] = actionSortByPID;
+   keys['O'] = actionToggleRunningInContainer;
    keys['P'] = actionSortByCPU;
    keys['S'] = actionSetup;
    keys['T'] = actionSortByTime;
    keys['U'] = actionUntagAll;
-   keys['Z'] = actionTogglePauseProcessUpdate;
+   keys['Z'] = actionTogglePauseUpdate;
    keys['['] = actionLowerPriority;
    keys['\014'] = actionRedraw; // Ctrl+L
    keys['\177'] = actionCollapseIntoParent;

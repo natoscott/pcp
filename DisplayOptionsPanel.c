@@ -72,6 +72,7 @@ static HandlerResult DisplayOptionsPanel_eventHandler(Panel* super, int ch) {
 
    if (result == HANDLED) {
       this->settings->changed = true;
+      this->settings->lastUpdate++;
       Header* header = this->scr->header;
       Header_calculateHeight(header);
       Header_reinit(header);
@@ -115,6 +116,7 @@ DisplayOptionsPanel* DisplayOptionsPanel_new(Settings* settings, ScreenManager* 
    Panel_add(super, (Object*) CheckItem_newByRef("Shadow other users' processes", &(settings->shadowOtherUsers)));
    Panel_add(super, (Object*) CheckItem_newByRef("Hide kernel threads", &(settings->hideKernelThreads)));
    Panel_add(super, (Object*) CheckItem_newByRef("Hide userland process threads", &(settings->hideUserlandThreads)));
+   Panel_add(super, (Object*) CheckItem_newByRef("Hide processes running in containers", &(settings->hideRunningInContainer)));
    Panel_add(super, (Object*) CheckItem_newByRef("Display threads in a different color", &(settings->highlightThreads)));
    Panel_add(super, (Object*) CheckItem_newByRef("Show custom thread names", &(settings->showThreadNames)));
    Panel_add(super, (Object*) CheckItem_newByRef("Show program path", &(settings->showProgramPath)));

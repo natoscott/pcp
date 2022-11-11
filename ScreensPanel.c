@@ -12,7 +12,9 @@ in the source distribution for its full text.
 #include <ctype.h>
 #include <string.h>
 
+#include "AvailableColumnsPanel.h"
 #include "CRT.h"
+#include "DynamicScreen.h"
 #include "FunctionBar.h"
 #include "Hashtable.h"
 #include "ProvideCurses.h"
@@ -70,7 +72,7 @@ static HandlerResult ScreensPanel_eventHandlerRenaming(Panel* super, int ch) {
          Panel_setCursorToSelection(super);
       }
    } else {
-      switch(ch) {
+      switch (ch) {
          case 127:
          case KEY_BACKSPACE:
          {
@@ -132,7 +134,7 @@ static void startRenaming(Panel* super) {
    Panel_setCursorToSelection(super);
 }
 
-static void rebuildSettingsArray(Panel* super) {
+static void rebuildSettingsArray(Panel* super, int selected) {
    ScreensPanel* const this = (ScreensPanel*) super;
 
    int n = Panel_size(super);
@@ -144,13 +146,20 @@ static void rebuildSettingsArray(Panel* super) {
       this->settings->screens[i] = item->ss;
    }
    this->settings->nScreens = n;
+   /* ensure selection is in valid range */
+   if (selected > n - 1)
+      selected = n - 1;
+   else if (selected < 0)
+      selected = 0;
+   this->settings->ssIndex = selected;
+   this->settings->ss = this->settings->screens[selected];
 }
 
 static void addNewScreen(Panel* super) {
    ScreensPanel* const this = (ScreensPanel*) super;
 
    const char* name = "New";
-   ScreenSettings* ss = Settings_newScreen(this->settings, &(const ScreenDefaults){ .name = name, .columns = "PID Command", .sortKey = "PID" });
+   ScreenSettings* ss = Settings_newScreen(this->settings, &(const ScreenDefaults) { .name = name, .columns = "PID Command", .sortKey = "PID" });
    ScreenListItem* item = ScreenListItem_new(name, ss);
    int idx = Panel_getSelectedIndex(super);
    Panel_insert(super, idx + 1, (Object*) item);
@@ -164,7 +173,7 @@ static HandlerResult ScreensPanel_eventHandlerNormal(Panel* super, int ch) {
    ScreenListItem* oldFocus = (ScreenListItem*) Panel_getSelected(super);
    bool shouldRebuildArray = false;
    HandlerResult result = IGNORED;
-   switch(ch) {
+   switch (ch) {
       case '\n':
       case '\r':
       case KEY_ENTER:
@@ -242,9 +251,8 @@ static HandlerResult ScreensPanel_eventHandlerNormal(Panel* super, int ch) {
       case KEY_F(9):
       //case KEY_DC:
       {
-         if (Panel_size(super) > 1) {
+         if (Panel_size(super) > 1)
             Panel_remove(super, selected);
-         }
          shouldRebuildArray = true;
          result = HANDLED;
          break;
@@ -261,10 +269,18 @@ static HandlerResult ScreensPanel_eventHandlerNormal(Panel* super, int ch) {
    ScreenListItem* newFocus = (ScreenListItem*) Panel_getSelected(super);
    if (newFocus && oldFocus != newFocus) {
       ColumnsPanel_fill(this->columns, newFocus->ss, this->settings->dynamicColumns);
+      if (newFocus->ss->generic) {
+         char* currentScreen = newFocus->ss->name;
+         DynamicScreen_availableColumns(currentScreen);
+      } else {
+         Panel* availableColumns = AvailableColumnsPanel_get();
+         AvailableColumnsPanel_addPlatformColumn(availableColumns);
+         AvailableColumnsPanel_addDynamicColumns(availableColumns, this->settings->dynamicColumns);
+      }
       result = HANDLED;
    }
    if (shouldRebuildArray)
-      rebuildSettingsArray(super);
+      rebuildSettingsArray(super, selected);
    if (result == HANDLED)
       ScreensPanel_update(super);
    return result;
@@ -315,6 +331,7 @@ void ScreensPanel_update(Panel* super) {
    ScreensPanel* this = (ScreensPanel*) super;
    int size = Panel_size(super);
    this->settings->changed = true;
+   this->settings->lastUpdate++;
    this->settings->screens = xReallocArray(this->settings->screens, size + 1, sizeof(ScreenSettings*));
    for (int i = 0; i < size; i++) {
       ScreenListItem* item = (ScreenListItem*) Panel_get(super, i);

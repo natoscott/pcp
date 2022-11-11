@@ -44,6 +44,7 @@ typedef struct {
    bool treeView;
    bool treeViewAlwaysByPID;
    bool allBranchesCollapsed;
+   bool generic;
 } ScreenSettings;
 
 typedef struct Settings_ {
@@ -73,6 +74,7 @@ typedef struct Settings_ {
    bool shadowOtherUsers;
    bool showThreadNames;
    bool hideKernelThreads;
+   bool hideRunningInContainer;
    bool hideUserlandThreads;
    bool highlightBaseName;
    bool highlightDeletedExe;
@@ -96,6 +98,7 @@ typedef struct Settings_ {
    #endif
 
    bool changed;
+   uint64_t lastUpdate;
 } Settings;
 
 #define Settings_cpuId(settings, cpu) ((settings)->countCPUsFromOne ? (cpu)+1 : (cpu))

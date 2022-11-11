@@ -16,6 +16,7 @@ in the source distribution for its full text.
 
 #include "CRT.h"
 #include "FunctionBar.h"
+#include "GenericDataList.h"
 #include "Macros.h"
 #include "Object.h"
 #include "Platform.h"
@@ -24,7 +25,7 @@ in the source distribution for its full text.
 #include "XUtils.h"
 
 
-ScreenManager* ScreenManager_new(Header* header, const Settings* settings, const State* state, bool owner) {
+ScreenManager* ScreenManager_new(Header* header, const Settings* settings, State* state, bool owner) {
    ScreenManager* this;
    this = xMalloc(sizeof(ScreenManager));
    this->x1 = 0;
@@ -53,18 +54,28 @@ void ScreenManager_add(ScreenManager* this, Panel* item, int size) {
    ScreenManager_insert(this, item, size, Vector_size(this->panels));
 }
 
+static int header_height(const ScreenManager* this) {
+   if (this->state->hideMeters)
+      return 0;
+
+   if (this->header)
+      return this->header->height;
+
+   return 0;
+}
+
 void ScreenManager_insert(ScreenManager* this, Panel* item, int size, int idx) {
    int lastX = 0;
    if (idx > 0) {
       const Panel* last = (const Panel*) Vector_get(this->panels, idx - 1);
       lastX = last->x + last->w + 1;
    }
-   int height = LINES - this->y1 - (this->header ? this->header->height : 0) + this->y2;
+   int height = LINES - this->y1 - header_height(this) + this->y2;
    if (size <= 0) {
       size = COLS - this->x1 + this->x2 - lastX;
    }
    Panel_resize(item, size, height);
-   Panel_move(item, lastX, this->y1 + (this->header ? this->header->height : 0));
+   Panel_move(item, lastX, this->y1 + header_height(this));
    if (idx < this->panelCount) {
       for (int i =  idx + 1; i <= this->panelCount; i++) {
          Panel* p = (Panel*) Vector_get(this->panels, i);
@@ -91,7 +102,7 @@ Panel* ScreenManager_remove(ScreenManager* this, int idx) {
 }
 
 void ScreenManager_resize(ScreenManager* this) {
-   int y1_header = this->y1 + (this->header ? this->header->height : 0);
+   int y1_header = this->y1 + header_height(this);
    int panels = this->panelCount;
    int lastX = 0;
    for (int i = 0; i < panels - 1; i++) {
@@ -105,8 +116,9 @@ void ScreenManager_resize(ScreenManager* this) {
    Panel_move(panel, lastX, y1_header);
 }
 
-static void checkRecalculation(ScreenManager* this, double* oldTime, int* sortTimeout, bool* redraw, bool* rescan, bool* timedOut, bool *force_redraw) {
+static void checkRecalculation(ScreenManager* this, double* oldTime, int* sortTimeout, bool* redraw, bool* rescan, bool* timedOut, bool* force_redraw) {
    ProcessList* pl = this->header->pl;
+   GenericDataList* gl = this->header->gl;
 
    Platform_gettime_realtime(&pl->realtime, &pl->realtimeMs);
    double newTime = ((double)pl->realtime.tv_sec * 10) + ((double)pl->realtime.tv_usec / 100000);
@@ -121,12 +133,16 @@ static void checkRecalculation(ScreenManager* this, double* oldTime, int* sortTi
    if (*rescan) {
       *oldTime = newTime;
       int oldUidDigits = Process_uidDigits;
-      if (!this->state->pauseProcessUpdate && (*sortTimeout == 0 || this->settings->ss->treeView)) {
+      if (!this->state->pauseUpdate && (*sortTimeout == 0 || this->settings->ss->treeView)) {
          pl->needsSort = true;
          *sortTimeout = 1;
       }
       // scan processes first - some header values are calculated there
-      ProcessList_scan(pl, this->state->pauseProcessUpdate);
+      ProcessList_scan(pl, this->state->pauseUpdate);
+
+      if (this->settings->ss->generic)
+         GenericDataList_scan(gl, this->state->pauseUpdate);
+
       // always update header, especially to avoid gaps in graph meters
       Header_updateData(this->header);
       // force redraw if the number of UID digits was changed
@@ -136,8 +152,18 @@ static void checkRecalculation(ScreenManager* this, double* oldTime, int* sortTi
       *redraw = true;
    }
    if (*redraw) {
-      ProcessList_rebuildPanel(pl);
-      Header_draw(this->header);
+      if (this->settings->ss->generic) {
+         *force_redraw = true;
+         Vector_prune(pl->panel->items);
+
+         GenericDataList_rebuildPanel(gl);
+
+         pl->panel->items = gl->panel->items; // workaround
+      } else {
+         ProcessList_rebuildPanel(pl);
+      }
+      if (!this->state->hideMeters)
+         Header_draw(this->header);
    }
    *rescan = false;
 }
@@ -195,7 +221,7 @@ static void ScreenManager_drawPanels(ScreenManager* this, int focus, bool force_
       Panel_draw(panel,
                  force_redraw,
                  i == focus,
-                 panel != (Panel*)this->state->mainPanel || !this->state->hideProcessSelection,
+                 panel != (Panel*)this->state->mainPanel || !this->state->hideSelection,
                  State_hideFunctionBar(this->state));
       mvvline(panel->y, panel->x + panel->w, ' ', panel->h + (State_hideFunctionBar(this->state) ? 1 : 0));
    }
@@ -375,6 +401,11 @@ tryRight:
             goto tryRight;
          }
 
+         break;
+      case '#':
+         this->state->hideMeters = !this->state->hideMeters;
+         ScreenManager_resize(this);
+         force_redraw = true;
          break;
       case 27:
       case 'q':

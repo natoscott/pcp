@@ -29,6 +29,7 @@ in the source distribution for its full text.
 #include "DateMeter.h"
 #include "DateTimeMeter.h"
 #include "DiskIOMeter.h"
+#include "GenericDataList.h"
 #include "HostnameMeter.h"
 #include "HugePageMeter.h"
 #include "LoadAverageMeter.h"
@@ -250,7 +251,7 @@ const MeterClass* const Platform_meterTypes[] = {
    NULL
 };
 
-int Platform_getUptime() {
+int Platform_getUptime(void) {
    double uptime = 0;
    FILE* fd = fopen(PROCDIR "/uptime", "r");
    if (fd) {
@@ -285,7 +286,7 @@ err:
    *fifteen = NAN;
 }
 
-int Platform_getMaxPid() {
+int Platform_getMaxPid(void) {
    FILE* file = fopen(PROCDIR "/sys/kernel/pid_max", "r");
    if (!file)
       return -1;
@@ -496,7 +497,7 @@ FileLocks_ProcessData* Platform_getProcessLocks(pid_t pid) {
 
    char buffer[1024];
    FileLocks_LockData** data_ref = &pdata->locks;
-   while(fgets(buffer, sizeof(buffer), f)) {
+   while (fgets(buffer, sizeof(buffer), f)) {
       if (!strchr(buffer, '\n'))
          continue;
 
@@ -1056,3 +1057,11 @@ void Platform_done(void) {
    LibSensors_cleanup();
 #endif
 }
+
+void GenericDataList_goThroughEntries(ATTR_UNUSED GenericDataList* super, ATTR_UNUSED bool pauseUpdate) { return; }
+
+void GenericDataList_removePlatformList(ATTR_UNUSED GenericDataList* gl) { return; }
+
+GenericDataList* GenericDataList_addPlatformList(ATTR_UNUSED GenericDataList* super) {return NULL; }
+
+void GenericData_delete(ATTR_UNUSED Object* cast) { return; }

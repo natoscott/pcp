@@ -25,6 +25,8 @@ in the source distribution for its full text.
 #include "CRT.h"
 #include "DynamicColumn.h"
 #include "DynamicMeter.h"
+#include "DynamicScreen.h"
+#include "GenericDataList.h"
 #include "Hashtable.h"
 #include "Header.h"
 #include "IncSet.h"
@@ -66,7 +68,6 @@ static void printHelpFlag(const char* name) {
           "-V --version                    Print version info\n");
    Platform_longOptionsUsage(name);
    printf("\n"
-          "Long options may be passed with a single dash.\n\n"
           "Press F1 inside %s for online help.\n"
           "See 'man %s' for more information.\n", name, name);
 }
@@ -80,7 +81,9 @@ typedef struct CommandLineSettings_ {
    int sortKey;
    int delay;
    bool useColors;
+#ifdef HAVE_GETMOUSE
    bool enableMouse;
+#endif
    bool treeView;
    bool allowUnicode;
    bool highlightChanges;
@@ -97,7 +100,9 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
       .sortKey = 0,
       .delay = -1,
       .useColors = true,
+#ifdef HAVE_GETMOUSE
       .enableMouse = true,
+#endif
       .treeView = false,
       .allowUnicode = true,
       .highlightChanges = false,
@@ -143,7 +148,8 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
                for (int j = 1; j < LAST_PROCESSFIELD; j++) {
                   const char* name = Process_fields[j].name;
                   const char* description = Process_fields[j].description;
-                  if (name) printf("%19s %s\n", name, description);
+                  if (name)
+                     printf("%19s %s\n", name, description);
                }
                return STATUS_OK_EXIT;
             }
@@ -163,8 +169,10 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
             break;
          case 'd':
             if (sscanf(optarg, "%16d", &(flags->delay)) == 1) {
-               if (flags->delay < 1) flags->delay = 1;
-               if (flags->delay > 100) flags->delay = 100;
+               if (flags->delay < 1)
+                  flags->delay = 1;
+               if (flags->delay > 100)
+                  flags->delay = 100;
             } else {
                fprintf(stderr, "Error: invalid delay value \"%s\".\n", optarg);
                return STATUS_ERROR_EXIT;
@@ -172,7 +180,7 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
             break;
          case 'u':
          {
-            const char *username = optarg;
+            const char* username = optarg;
             if (!username && optind < argc && argv[optind] != NULL &&
                 (argv[optind][0] != '\0' && argv[optind][0] != '-')) {
                username = argv[optind++];
@@ -181,7 +189,7 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
             if (!username) {
                flags->userId = geteuid();
             } else if (!Action_setUserOnly(username, &(flags->userId))) {
-               for (const char *itr = username; *itr; ++itr)
+               for (const char* itr = username; *itr; ++itr)
                   if (!isdigit((unsigned char)*itr)) {
                      fprintf(stderr, "Error: invalid user \"%s\".\n", username);
                      return STATUS_ERROR_EXIT;
@@ -214,11 +222,11 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
                flags->pidMatchList = Hashtable_new(8, false);
             }
 
-            while(pid) {
-                unsigned int num_pid = atoi(pid);
-                //  deepcode ignore CastIntegerToAddress: we just want a non-NULL pointer here
-                Hashtable_put(flags->pidMatchList, num_pid, (void *) 1);
-                pid = strtok_r(NULL, ",", &saveptr);
+            while (pid) {
+               unsigned int num_pid = atoi(pid);
+               //  deepcode ignore CastIntegerToAddress: we just want a non-NULL pointer here
+               Hashtable_put(flags->pidMatchList, num_pid, (void*) 1);
+               pid = strtok_r(NULL, ",", &saveptr);
             }
             free(argCopy);
 
@@ -230,19 +238,19 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
             break;
          }
          case 'H': {
-            const char *delay = optarg;
+            const char* delay = optarg;
             if (!delay && optind < argc && argv[optind] != NULL &&
                 (argv[optind][0] != '\0' && argv[optind][0] != '-')) {
-                delay = argv[optind++];
+               delay = argv[optind++];
             }
             if (delay) {
-                if (sscanf(delay, "%16d", &(flags->highlightDelaySecs)) == 1) {
-                   if (flags->highlightDelaySecs < 1)
-                      flags->highlightDelaySecs = 1;
-                } else {
-                   fprintf(stderr, "Error: invalid highlight delay value \"%s\".\n", delay);
-                   return STATUS_ERROR_EXIT;
-                }
+               if (sscanf(delay, "%16d", &(flags->highlightDelaySecs)) == 1) {
+                  if (flags->highlightDelaySecs < 1)
+                     flags->highlightDelaySecs = 1;
+               } else {
+                  fprintf(stderr, "Error: invalid highlight delay value \"%s\".\n", delay);
+                  return STATUS_ERROR_EXIT;
+               }
             }
             flags->highlightChanges = true;
             break;
@@ -259,6 +267,15 @@ static CommandLineStatus parseArguments(const char* program, int argc, char** ar
          }
       }
    }
+
+   if (optind < argc) {
+      fprintf(stderr, "Error: unsupported non-option ARGV-elements:");
+      while (optind < argc)
+         fprintf(stderr, " %s", argv[optind++]);
+      fprintf(stderr, "\n");
+      return STATUS_ERROR_EXIT;
+   }
+
    return STATUS_OK;
 }
 
@@ -313,11 +330,16 @@ int CommandLine_run(const char* name, int argc, char** argv) {
       dc = Hashtable_new(0, true);
 
    ProcessList* pl = ProcessList_new(ut, dm, dc, flags.pidMatchList, flags.userId);
-
    Settings* settings = Settings_new(pl->activeCPUs, dc);
-   pl->settings = settings;
 
-   Header* header = Header_new(pl, settings, 2);
+   Hashtable* dt = DynamicScreens_new(settings);
+   GenericDataList* gl = GenericDataList_new();
+
+   pl->settings = settings;
+   if (gl)
+      gl->settings = settings;
+
+   Header* header = Header_new(pl, gl, settings, 2);
 
    Header_populateFromSettings(header);
 
@@ -347,7 +369,7 @@ int CommandLine_run(const char* name, int argc, char** argv) {
    CRT_init(settings, flags.allowUnicode);
 
    MainPanel* panel = MainPanel_new();
-   ProcessList_setPanel(pl, (Panel*) panel);
+   MainPanel* genericDataPanel = MainPanel_new();
 
    MainPanel_updateLabels(panel, settings->ss->treeView, flags.commFilter);
 
@@ -357,11 +379,18 @@ int CommandLine_run(const char* name, int argc, char** argv) {
       .pl = pl,
       .mainPanel = panel,
       .header = header,
-      .pauseProcessUpdate = false,
-      .hideProcessSelection = false,
+      .pauseUpdate = false,
+      .hideSelection = false,
+      .hideMeters = false,
    };
 
-   MainPanel_setState(panel, &state);
+   panel->state = &state;
+   genericDataPanel->state = &state;
+
+   ProcessList_setPanel(pl, (Panel*) panel);
+   if (gl)
+      GenericDataList_setPanel(gl, (Panel*) genericDataPanel);
+
    if (flags.commFilter)
       setCommFilter(&state, &(flags.commFilter));
 
@@ -389,6 +418,7 @@ int CommandLine_run(const char* name, int argc, char** argv) {
 
    Header_delete(header);
    ProcessList_delete(pl);
+   GenericDataList_delete(gl);
 
    ScreenManager_delete(scr);
    MetersPanel_cleanup();
@@ -404,6 +434,7 @@ int CommandLine_run(const char* name, int argc, char** argv) {
    Settings_delete(settings);
    DynamicColumns_delete(dc);
    DynamicMeters_delete(dm);
+   DynamicScreens_delete(dt);
 
    return 0;
 }

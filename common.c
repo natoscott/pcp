@@ -47,7 +47,7 @@
 #endif
 
 /* Number of decimal places */
-extern int dplaces_nr;
+int dplaces_nr = -1;
 
 /* Units (sectors, Bytes, kilobytes, etc.) */
 char units[] = {'s', 'B', 'k', 'M', 'G', 'T', 'P', '?'};
@@ -441,7 +441,7 @@ void check_overflow(unsigned int val1, unsigned int val2,
 		}
 }
 
-#ifndef SOURCE_SADC
+#if defined(SOURCE_SAR) || defined(SOURCE_SADF) || defined(HAVE_PCP)
 /*
  ***************************************************************************
  * Read /proc/devices file and get device-mapper major number.
@@ -1742,4 +1742,4 @@ int parse_values(char *strargv, unsigned char bitmap[], int max_val, const char 
 	return 0;
 }
 
-#endif /* SOURCE_SADC undefined */
+#endif /* SOURCE_SAR || SOURCE_SADF || HAVE_PCP */

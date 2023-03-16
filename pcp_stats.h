@@ -12,6 +12,15 @@
  ***************************************************************************
  */
 
+/* Functions used to read from the PCP archive format */
+unsigned long long pcp_read_u64(pmValueSet *, int, pmDesc *, int);
+unsigned long pcp_read_u32(pmValueSet *, int, pmDesc *, int);
+double pcp_read_double(pmValueSet *, int, pmDesc *, int);
+float pcp_read_float(pmValueSet *, int, pmDesc *, int);
+char *pcp_read_str(pmValueSet *, int, pmDesc *, int);
+
+void pcp_read_stats(pmValueSet *, struct file_header *, int);
+
 /* Functions used to display statistics in PCP format */
 __print_funct_t pcp_print_cpu_stats
 	(struct activity *, int);

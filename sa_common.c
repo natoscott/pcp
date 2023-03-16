@@ -445,7 +445,7 @@ int write_all(int fd, const void *buf, int nr_bytes)
 	return offset;
 }
 
-#ifndef SOURCE_SADC
+#if defined(SOURCE_SAR) || defined(SOURCE_SADF) || defined(HAVE_PCP)
 /*
  ***************************************************************************
  * Allocate structures.
@@ -657,7 +657,7 @@ int decode_timestamp(char timestamp[], struct tstamp_ext *tse)
  *
  * IN:
  * @timestamp	Epoch time to decode (format: number of seconds since
- *		Januray 1st 1970 00:00:00 UTC).
+ *		January 1st 1970 00:00:00 UTC).
  * @flags	Flags for common options and system state.
  *
  * OUT:
@@ -3479,4 +3479,4 @@ int check_time_limits(struct tstamp_ext *tm_start, struct tstamp_ext *tm_end)
 	return 0;
 }
 
-#endif /* SOURCE_SADC undefined */
+#endif /* SOURCE_SAR || SOURCE_SADF defined */

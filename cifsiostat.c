@@ -55,7 +55,6 @@ struct io_cifs *cifs_list = NULL;
 
 int cpu_nr = 0;		/* Nb of processors on the machine */
 int flags = 0;		/* Flag for common options and system state */
-int dplaces_nr = -1;	/* Number of decimal places */
 
 long interval = 0;
 char timestamp[TIMESTAMP_LEN];

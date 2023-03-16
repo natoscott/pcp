@@ -20,6 +20,10 @@
 #include <sys/sysmacros.h>
 #endif
 
+#ifdef HAVE_PCP
+#include <pcp/pmapi.h>
+#endif
+
 /*
  ***************************************************************************
  * Various keywords and constants
@@ -181,7 +185,11 @@ enum {
 
 #define PANIC(m)	sysstat_panic(__FUNCTION__, m)
 
+/* Number of decimal places */
+extern int dplaces_nr;
+
 /* Number of ticks per second */
+#undef HZ /* <sys/param.h> contains a (fixed) definition */
 #define HZ		hz
 extern unsigned long hz;
 
@@ -279,7 +287,7 @@ int check_dir
 void check_overflow
 	(unsigned int, unsigned int, unsigned int);
 
-#ifndef SOURCE_SADC
+#if defined(SOURCE_SAR) || defined(SOURCE_SADF) || defined(HAVE_PCP)
 int count_bits
 	(void *, int);
 int count_csvalues
@@ -338,5 +346,5 @@ void xprintf
 void xprintf0
 	(int, const char *, ...);
 
-#endif /* SOURCE_SADC undefined */
+#endif /* SOURCE_SADF || SOURCE_SAR ||HAVE_PCP */
 #endif  /* _COMMON_H */

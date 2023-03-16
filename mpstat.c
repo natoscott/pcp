@@ -96,8 +96,6 @@ unsigned int flags = 0;
 
 /* Interval and count parameters */
 long interval = -1, count = 0;
-/* Number of decimal places */
-int dplaces_nr = -1;
 
 /*
  * Nb of processors on the machine.

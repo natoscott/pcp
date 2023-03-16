@@ -334,15 +334,17 @@ librdstats_light.a: rd_stats_light.o count_light.o
 librdsensors.a: rd_sensors.o
 	$(AR) rvs $@ $?
 
-sadc.o: sadc.c sa.h version.h common.h rd_stats.h rd_sensors.h
+sadc.o: sadc.c sa.h version.h common.h rd_stats.h rd_sensors.h pcp_stats.h pcp_def_metrics.h
 
-sadc: LFLAGS += $(LFSENSORS)
+sadc: LFLAGS += $(LFSENSORS) $(LFPCP)
 
-sadc: sadc.o act_sadc.o sa_wrap.o sa_common_light.o common_light.o systest.o librdstats.a librdsensors.a libsyscom.a
+sadc: sadc.o act_sadc.o sa_wrap.o sa_common_light.o common_light.o pcp_stats.o pcp_def_metrics.o systest.o librdstats.a librdsensors.a libsyscom.a
 
-sar.o: sar.c sa.h version.h common.h rd_stats.h rd_sensors.h
+sar.o: sar.c sa.h version.h common.h rd_stats.h rd_sensors.h pcp_stats.h pcp_def_metrics.h
 
-sar: sar.o act_sar.o format_sar.o sa_common.o pr_stats.o librdstats_light.a libsyscom.a
+sar: LFLAGS += $(LFPCP)
+
+sar: sar.o act_sar.o format_sar.o sa_common.o pr_stats.o pcp_stats.o pcp_def_metrics.o librdstats_light.a libsyscom.a
 
 sadf.o: sadf.c sadf.h version.h sa.h common.h rd_stats.h rd_sensors.h
 

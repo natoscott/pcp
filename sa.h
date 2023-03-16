@@ -772,7 +772,7 @@ enum {
 	/*
 	 * R_RESTART means that this is a special record containing
 	 * a LINUX RESTART message.
-	*/
+	 */
 	R_RESTART	= 2,
 	/*
 	 * R_LAST_STATS warns sar that this is the last record to be written
@@ -789,7 +789,7 @@ enum {
 	/*
 	 * R_EXTRA* records means that extra structures are following current
 	 * record_header structure, but no statistics structures.
-	*/
+	 */
 	R_EXTRA_MIN	= 5,
 	R_EXTRA_MAX	= 15
 };
@@ -937,6 +937,9 @@ struct act_bitmap {
 	int b_size;
 };
 
+/* Structure used to define Performance Co-Pilot metrics relating to an activity */
+struct act_metrics;
+
 /*
  * Structure used to define an activity.
  * Note: This structure can be modified without changing the format of data files.
@@ -1083,7 +1086,7 @@ struct activity {
 	/*
 	 * Number of SVG graphs for this activity. The total number of graphs for
 	 * the activity can be greater though if flag AO_GRAPH_PER_ITEM is set, in
-	 * which case the total number will  be @g_nr * @nr.
+	 * which case the total number will be @g_nr * @nr.
 	 */
 	int g_nr;
 	/*
@@ -1164,8 +1167,12 @@ struct activity {
 	 * if @bitmap is not NULL.
 	 */
 	struct act_bitmap *bitmap;
+	/*
+	 * Optional metric names, descriptors and identifiers for this activity;
+	 * @metrics field set to NULL when PCP archive support is not available.
+	 */
+	struct act_metrics *metrics;
 };
-
 
 /*
  ***************************************************************************
@@ -1536,7 +1543,7 @@ int skip_extra_struct
 int write_all
 	(int, const void *, int);
 
-#ifndef SOURCE_SADC
+#if defined(SOURCE_SAR) || defined(SOURCE_SADF) || defined(HAVE_PCP)
 int add_list_item
 	(struct sa_item **, char *, int);
 void allocate_bitmaps
@@ -1643,5 +1650,5 @@ void set_record_timestamp_string
 	(uint64_t, char *, char *, int, struct tstamp_ext *);
 void swap_struct
 	(unsigned int [], void *, int);
-#endif /* SOURCE_SADC undefined */
+#endif /* SOURCE_SADF || SOURCE_SAR defined */
 #endif  /* _SA_H */

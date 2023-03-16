@@ -652,7 +652,7 @@ __printf_funct_t print_pcp_statistics(int *tab, int action, struct activity *act
 					break;
 
 				case A_PCSW:
-					pcp_def_pcsw_metrics();
+					pcp_def_pcsw_metrics(act[p]);
 					break;
 
 				case A_IRQ:
@@ -661,15 +661,15 @@ __printf_funct_t print_pcp_statistics(int *tab, int action, struct activity *act
 					break;
 
 				case A_SWAP:
-					pcp_def_swap_metrics();
+					pcp_def_swap_metrics(act[p]);
 					break;
 
 				case A_PAGE:
-					pcp_def_paging_metrics();
+					pcp_def_paging_metrics(act[p]);
 					break;
 
 				case A_IO:
-					pcp_def_io_metrics();
+					pcp_def_io_metrics(act[p]);
 					break;
 
 				case A_MEMORY:
@@ -677,11 +677,11 @@ __printf_funct_t print_pcp_statistics(int *tab, int action, struct activity *act
 					break;
 
 				case A_KTABLES:
-					pcp_def_ktables_metrics();
+					pcp_def_ktables_metrics(act[p]);
 					break;
 
 				case A_QUEUE:
-					pcp_def_queue_metrics();
+					pcp_def_queue_metrics(act[p]);
 					break;
 
 				case A_SERIAL:
@@ -698,71 +698,71 @@ __printf_funct_t print_pcp_statistics(int *tab, int action, struct activity *act
 					break;
 
 				case A_NET_NFS:
-					pcp_def_net_nfs_metrics();
+					pcp_def_net_nfs_metrics(act[p]);
 					break;
 
 				case A_NET_NFSD:
-					pcp_def_net_nfsd_metrics();
+					pcp_def_net_nfsd_metrics(act[p]);
 					break;
 
 				case A_NET_SOCK:
-					pcp_def_net_sock_metrics();
+					pcp_def_net_sock_metrics(act[p]);
 					break;
 
 				case A_NET_IP:
-					pcp_def_net_ip_metrics();
+					pcp_def_net_ip_metrics(act[p]);
 					break;
 
 				case A_NET_EIP:
-					pcp_def_net_eip_metrics();
+					pcp_def_net_eip_metrics(act[p]);
 					break;
 
 				case A_NET_ICMP:
-					pcp_def_net_icmp_metrics();
+					pcp_def_net_icmp_metrics(act[p]);
 					break;
 
 				case A_NET_EICMP:
-					pcp_def_net_eicmp_metrics();
+					pcp_def_net_eicmp_metrics(act[p]);
 					break;
 
 				case A_NET_TCP:
-					pcp_def_net_tcp_metrics();
+					pcp_def_net_tcp_metrics(act[p]);
 					break;
 
 				case A_NET_ETCP:
-					pcp_def_net_etcp_metrics();
+					pcp_def_net_etcp_metrics(act[p]);
 					break;
 
 				case A_NET_UDP:
-					pcp_def_net_udp_metrics();
+					pcp_def_net_udp_metrics(act[p]);
 					break;
 
 				case A_NET_SOCK6:
-					pcp_def_net_sock6_metrics();
+					pcp_def_net_sock6_metrics(act[p]);
 					break;
 
 				case A_NET_IP6:
-					pcp_def_net_ip6_metrics();
+					pcp_def_net_ip6_metrics(act[p]);
 					break;
 
 				case A_NET_EIP6:
-					pcp_def_net_eip6_metrics();
+					pcp_def_net_eip6_metrics(act[p]);
 					break;
 
 				case A_NET_ICMP6:
-					pcp_def_net_icmp6_metrics();
+					pcp_def_net_icmp6_metrics(act[p]);
 					break;
 
 				case A_NET_EICMP6:
-					pcp_def_net_eicmp6_metrics();
+					pcp_def_net_eicmp6_metrics(act[p]);
 					break;
 
 				case A_NET_UDP6:
-					pcp_def_net_udp6_metrics();
+					pcp_def_net_udp6_metrics(act[p]);
 					break;
 
 				case A_HUGE:
-					pcp_def_huge_metrics();
+					pcp_def_huge_metrics(act[p]);
 					break;
 
 				case A_PWR_FAN:
@@ -1441,7 +1441,7 @@ __printf_funct_t print_svg_header(void *parm, int action, char *dfile, char *my_
  * @dfile	Name of PCP archive file.
  * @my_tz	Current timezone (unused here).
  * @file_magic	System activity file magic header (unused here).
- * @file_hdr	System activity file standard header (unused here).
+ * @file_hdr	System activity file standard header.
  * @act		Array of activities (unused here).
  * @id_seq	Activity sequence (unused here).
  * @file_actlst	List of (known or unknown) activities in file (unused here).

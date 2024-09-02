@@ -11,6 +11,7 @@
 # for more details.
 #
 
+import numpy as np
 import pandas as pd
 import xgboost as xgb
 
@@ -34,7 +35,14 @@ from cmmv import ( MMV_SEM_INSTANT, MMV_SEM_DISCRETE, MMV_SEM_COUNTER,
                    MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_STRING,
                    MMV_FLAG_SENTINEL )
 
-permutation_importance = False # toggle, expensive to calculatethough
+try:
+    import interpretability_module as interp
+    from utils import local_diffi_batch
+    anomaly_explanations = True
+except ImportError:
+    anomaly_explanations = False
+
+permutation_importance = False # toggle, expensive to calculate though
 try:
     import shap
     shap_explanations = True
@@ -74,11 +82,15 @@ class TreetopServer():
     _training_count = 0  # number of times training was performed
     _training_interval = 10  # server training interval (seconds)
     _importance_type = 'gain'  # default feature importance measure
+    _variance_threshold = 0.125  # minimum level of feature variance
+    _mutualinfo_threshold = 0.125  # minimum target mutual information
+    _max_anomaly_features = 25  # maximum anomaly features engineered
 
     def __init__(self):
         self.client = None
         self.source = None
         self.datasets = None
+        self.mutualinfo = None
         self.speclocal = None
         self.start_time = None
         self.end_time = None
@@ -255,30 +267,36 @@ class TreetopServer():
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
                               shorttext = "Count of samples in the training set"),
-                   mmv.mmv_metric(name = "training.total_features",
+                   mmv.mmv_metric(name = "features.total",
                               item = 12,
                               typeof = MMV_TYPE_U32,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
                               shorttext = "Count of features in the training set"),
-                   mmv.mmv_metric(name = "training.low_variance",
+                   mmv.mmv_metric(name = "features.low_variance",
                               item = 13,
                               typeof = MMV_TYPE_U32,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
                               shorttext = "Count of features with low variance"),
-                   mmv.mmv_metric(name = "training.missing_values",
+                   mmv.mmv_metric(name = "features.missing_values",
                               item = 14,
                               typeof = MMV_TYPE_U32,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of features with one or more missing value"),
-                   mmv.mmv_metric(name = "training.mutual_information",
+                              shorttext = "Count of features with missing values"),
+                   mmv.mmv_metric(name = "features.mutual_information",
                               item = 15,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_U32,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
                               shorttext = "Count of features with sufficient mutual information"),
+                   mmv.mmv_metric(name = "features.anomalies",
+                              item = 38,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of total anomaly detection features"),
                    mmv.mmv_metric(name = "sampling.elapsed_time",
                               item = 16,
                               typeof = MMV_TYPE_FLOAT,
@@ -446,16 +464,10 @@ class TreetopServer():
         self._training_count += 1
         values = self.values
 
-        # TODO: nuke
-        value = values.lookup_mapping("inferring.output.confidence", None)
-        values.set(value, 0.9723569201)
-
         value = values.lookup_mapping("target.metric", None)
         values.set_string(value, self.target())
         value = values.lookup_mapping("target.timestamp", None)
         values.set_string(value, self.timestamp())
-        #value = values.lookup_mapping("target.latest", None)
-        #value = values.lookup_mapping("target.recent", None)
 
         value = values.lookup_mapping("sampling.count", None)
         values.set(value, self._sample_count)
@@ -671,6 +683,118 @@ class TreetopServer():
 
         self.update_dataset(index, names, dtypes, values)
 
+    def export_values(self, target, window):
+        """ export dataset metrics, including the valueset metric """
+        """ (used in the treetop recent-values lag graph display) """
+        values = window[target].tolist()[-self._sample_valueset:]
+        valueset = ','.join(map("{:.2f}".format, values))
+        if len(valueset) > 255: # hard limit of mapped string size
+            truncate = valueset[0:255].rfind(',')
+            valueset = valueset[0:truncate]
+        values = self.values
+        value = values.lookup_mapping("target.valueset", None)
+        values.set_string(value, valueset)
+        value = values.lookup_mapping("features.total", None)
+        values.set(value, window.shape[1])
+        value = values.lookup_mapping("features.missing_values", None)
+        values.set(value, sum(len(window) - window.count()))
+
+    def timestamp_features(self, timestamps):
+        """ time features - into each row (sample) add time-based features """
+        (sec_in_min, min_in_hour, hour_in_day, day_of_week) = ([], [], [], [])
+
+        # timestamp is removed from training datasets and replaced with these
+        # new representations adding meaning for cyclic analysis scenarios
+        for timestamp in timestamps:
+            sec_in_min.append(timestamp.second)
+            min_in_hour.append(timestamp.minute)
+            hour_in_day.append(timestamp.hour)
+            day_of_week.append(timestamp.dayofweek)
+        return pd.DataFrame(data={
+            'timestamp-second-in-minute': sec_in_min,
+            'timestamp-minute-in-hour': min_in_hour,
+            'timestamp-hour-in-day': hour_in_day,
+            'timestamp-day-of-week': day_of_week,
+        })
+
+    def top_anomaly_features(self, iso, y_pred_diffi, df, N):
+        """ pick top-most anomalous features to add to the raw dataset """
+        fit = df.to_numpy()[np.where(y_pred_diffi == 1)]
+        diffi, ord_idx_diffi, exec_time_diffi = local_diffi_batch(iso, fit)
+        #print('Average time Local-DIFFI:', round(np.mean(exec_time_diffi), 5))
+        #print('Total time Local-DIFFI:', round(np.sum(exec_time_diffi), 5))
+
+        # use DIFFI anomaly values to find the features contributing most
+        rank_df = pd.DataFrame(diffi).sum().nlargest(N, keep='all')
+
+        # dictionary of keys: anomalies-feature_name and values: array of DIFFI scores
+        frame = {}
+        for i in rank_df.index:   # column index (original features), from ranking
+            key = 'anomalies-' + df.columns[i]
+            value = [0] * df.shape[0]   # zero-filled array
+            # fill in just the anomaly values now (replacing zeroes)
+            for diffi_index, value_index in enumerate(np.where(y_pred_diffi == 1)[0]):
+                value[value_index] = diffi[diffi_index][i]
+            #print('Anomaly:', key, 'score:', value)
+            frame[key] = value
+        return pd.DataFrame(data=frame, dtype='float64')
+
+    def anomaly_features(self, df):
+        """ anomaly feature engineering - add up to a limit of new features """
+        t0 = time.time()
+        df0 = df.fillna(0)
+        iso = IsolationForest(n_jobs=-1).fit(df0)
+        y_pred_diffi = np.array(iso.decision_function(df0) < 0).astype('int')
+        anomalies_df = self.top_anomaly_features(iso, y_pred_diffi, df0,
+                                                 self._max_anomaly_features)
+        t1 = time.time()
+        print('Anomaly time:', t1 - t0)
+        print('Anomaly features:', len(anomalies_df))
+        value = self.values.lookup_mapping("features.anomalies", None)
+        self.values.set(value,  len(anomalies_df))
+        return anomalies_df
+
+    def reduce_with_variance(self, train_X):
+        """ Automated dimensionality reduction using variance """
+        t0 = time.time()
+        try:
+           cull = VarianceThreshold(threshold=self._variance_threshold)
+           cull.fit(train_X)
+        except ValueError:
+            return train_X # no columns met criteria, training will struggle
+        t1 = time.time()
+        print('Variance time:', t1 - t0)
+        keep = cull.get_feature_names_out()
+        print('Keeping', len(keep), 'of', train_X.shape[1], 'columns with variance')
+        value = self.values.lookup_mapping("features.low_variance", None)
+        self.values.set(value, train_X.shape[1] - len(keep))
+        return train_X[keep]
+
+    def reduce_with_mutual_info(self, train_y, train_X):
+        """ Automated dimensionality reduction using mutual information """
+        clean_X = train_X.fillna(0)
+        clean_y = train_y.values.flatten()
+
+        # calculate all features mutual information with the target variable
+        t0 = time.time()
+        mi = mutual_info_regression(clean_X, clean_y)
+        mi /= np.max(mi)  # normalise based on largest value observed
+        t1 = time.time()
+        print('MutualInformation time:', t1 - t0)
+
+        results = {}
+        for i, column in enumerate(clean_X.columns):
+            results[column] = list([mi[i]])
+        self.mutualinfo = pd.DataFrame(data=results, dtype='float64')
+
+        cull = mi <= self._mutualinfo_threshold
+        keep = (mi > self._mutualinfo_threshold).sum()
+        cols = train_X.shape[1]
+        print('Keeping', keep, 'of', cols, 'columns with mutual information')
+        indices = np.where(cull)
+        clean_X = clean_X.drop(clean_X.columns[indices], axis=1)
+        return train_X[clean_X.columns]  # undo NaN->0
+
     def prepare_split(self, target, notrain, splits=5, verbose=0):
         targets = [target]
         window = self.df
@@ -684,56 +808,45 @@ class TreetopServer():
         window = window.dropna(subset=targets, ignore_index=True)
 
         # export most recent target values for client to display
-        values = window[target].tolist()[-self._sample_valueset:]
-        valueset = ','.join(map("{:.2f}".format, values))
-        if len(valueset) > 255: # hard limit of mapped string size
-            truncate = valueset[0:255].rfind(',')
-            valueset = valueset[0:truncate]
-        value = self.values.lookup_mapping("target.valueset", None)
-        self.values.set_string(value, valueset)
+        self.export_values(target, window)
 
-        #metrics['total_features'] = window.shape[1]
-    
-        # Automated feature engineering based on time
-        #times_X = timestamp_features(window['timestamp'])
-        #if verbose: print('times_X shape:', times_X.shape)
-        #if verbose: print('times_X index:', times_X.index)
-    
-        # remove columns (metrics) requested by user
+        # remove columns (performance metrics) requested by user
         columns = copy.deepcopy(notrain)
         if verbose: print('Dropping notrain', len(columns), 'columns:', columns)
-        window_X = window.drop(columns=columns)
+        clean_X = window.drop(columns=columns)
     
-        # track columns containing intermittent NaNs to reinstate later
-        #metrics['missing_values'] = window_X.isna().sum().sum()
-        print('missing_values', window_X.isna().sum().sum())
-        #dirty_X = window_X.loc[:, window_X.isnull().any()]
-        #clean_X = window_X.loc[:, window_X.notnull().all()]
-        clean_X = window_X  # added 24/8, hack
+        # automated feature engineering based on time
+        times_X = self.timestamp_features(window['timestamp'])
+        if verbose: print('times_X shape:', times_X.shape)
+        if verbose: print('times_X index:', times_X.index)
+
+        # extract sample (prediction) timestamp
         clean_y = clean_X.loc[:, targets]
-        timestr = clean_X.iloc[-1]['timestamp'] # current reporting sample (prediction) timestamp
+        timestr = clean_X.iloc[-1]['timestamp']
         targets.append('timestamp')
+
+        # remove the original timestamp feature
         clean_X = clean_X.drop(columns=targets)
     
-        # Automated feature reduction based on variance
-        #clean_X = reduce_with_variance(clean_X)
-    
-        # Automated feature reduction based on mutual information
-        #clean_X = reduce_with_mutual_info(clean_y, clean_X, metrics)
-    
-        # Automated anomaly-based feature engineering
-        #quirk_X = anomaly_features(clean_X, metrics, N=25)
-        #if verbose: print('quirk_X shape:', quirk_X.shape)
+        # automated anomaly-based feature engineering
+        quirk_X = self.anomaly_features(clean_X)
+        if verbose: print('quirk_X shape:', quirk_X.shape)
     
         # merge reduced set with new features
-        #clean_X = pd.merge(times_X, clean_X, left_index=True, right_index=True)
-        #clean_X = pd.merge(clean_X, quirk_X, left_index=True, right_index=True)
-        #final_X = pd.merge(clean_X, dirty_X, left_index=True, right_index=True)
-        final_X = clean_X   # added 24/8, hack
-        finish = final_X.shape[0] - 1
+        clean_X = pd.merge(times_X, clean_X, left_index=True, right_index=True)
+        clean_X = pd.merge(clean_X, quirk_X, left_index=True, right_index=True)
+
+        # automated feature reduction based on variance
+        clean_X = self.reduce_with_variance(clean_X)
+    
+        # automated feature reduction based on mutual information
+        clean_X = self.reduce_with_mutual_info(clean_y, clean_X)
     
         # prepare for cross-validation over the training window
-        time_cv = TimeSeriesSplit(gap=0, max_train_size=finish, n_splits=splits, test_size=1)
+        final_X = clean_X
+        finish = final_X.shape[0] - 1
+        time_cv = TimeSeriesSplit(gap=0, max_train_size=finish,
+                                  n_splits=splits, test_size=1)
     
         # Finally, perform the actual test/train splitting.
         # Next target metric value (y) forms the test set,
@@ -750,15 +863,14 @@ class TreetopServer():
             print('Final test set y shape:', test_y.shape, 'type:', type(test_y))
             print('Final test set X shape:', test_X.shape, 'type:', type(test_X))
     
-        # stash latest observed values for reporting
-        #values = {}
-        #for column in train_X.columns:
-        #    values[column] = train_X.iloc[-1][column]
-        #for column in train_y.columns:
-        #    values[column] = train_y.iloc[-1][column]
-        #metrics['values'] = values
-
         return (train_X, train_y, test_X, test_y, time_cv, timestr)
+ 
+    @staticmethod
+    def confidence_level(actual, predicted):
+        difference = abs(predicted - actual)
+        if difference == 0:
+            return 1  # avoid divide-by-zero, highly confident
+        return 1.0 - (difference / actual)
 
     def prepare_models(self):
         # given a specific self.timestamp identifying the target record
@@ -798,12 +910,16 @@ class TreetopServer():
         # TODO: time series cross validation:
         #https://xgboost.readthedocs.io/en/stable/python/sklearn_estimator.html
 
+        # TODO: confidence
+        value = self.values.lookup_mapping("inferring.output.confidence", None)
+        self.values.set(value, 0.9723569201)
+
         return model, train_X, train_y, test_X, test_y
 
     def optimise(self, model, train_X, train_y, test_X, test_y):
         count = test_X.shape[1]
         maxdf = test_X.loc[test_X.index.repeat(count)].reset_index(drop=True)
-        mindf = maxdf.copy()  # contents are the same before perturbation
+        mindf = maxdf.copy()  # min/max contents the same before perturbation
 
         # perturb one feature in each row
         maxima = train_X.max().to_frame().T

@@ -21,6 +21,11 @@ static const int TargetValueMeter_attributes[] = {
    METER_VALUE,
 };
 
+static const char* const TargetValueMeter_captions[] = {
+   "Latest: ",
+   "Lag",
+};
+
 static double* parseValueset(char* valueset, size_t* nValues, double* maximum) {
    size_t nv = 0;
    const int MAX_VALUESET = 64;
@@ -54,6 +59,8 @@ static void TargetValueMeter_updateValues(Meter* this) {
 
    // split into comma-separated list and convert to double
    values = parseValueset(valueset, &nValues, &maximum);
+   for (size_t i = 0; i < nValues; i++)
+      valueset[i] /= maximum * 100.0;
 
    // prepare value array for GraphMeterMode_draw rendering
    GraphData* data = &this->drawData;
@@ -64,6 +71,13 @@ static void TargetValueMeter_updateValues(Meter* this) {
 
    this->curItems = 1;
    this->values[0] = 0; // most recent
+   if (this->mode == GRAPH_METERMODE) {
+      this->total = 100.0;
+      this->caption = TargetValueMeter_captions[1];
+   } else {
+      this->total = maximum;
+      this->caption = TargetValueMeter_captions[0];
+   }
 
    xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%.2f", this->values[0]);
 }
@@ -75,6 +89,11 @@ static void TargetValueMeter_display(const Object* cast, RichString* out) {
 
    len = xSnprintf(buffer, sizeof(buffer), "%.2f ", this->values[0]);
    RichString_appendnAscii(out, CRT_colors[METER_VALUE], buffer, len);
+}
+
+static void TargetValueMeter_done(Meter* this) {
+   /* reset to starting point for safe delete */
+   this->caption = NULL;
 }
 
 const MeterClass TargetValueMeter_class = {
@@ -92,5 +111,6 @@ const MeterClass TargetValueMeter_class = {
    .name = "TargetValue",
    .uiName = "Values",
    .description = "Target values preceding the current timestamp",
-   .caption = "Values: "
+   .caption = TargetValueMeter_captions[0],
+   .done = TargetValueMeter_done
 };

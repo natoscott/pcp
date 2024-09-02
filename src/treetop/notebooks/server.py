@@ -741,6 +741,8 @@ class TreetopServer():
 
     def anomaly_features(self, df):
         """ anomaly feature engineering - add up to a limit of new features """
+        if not anomaly_explanations:
+            return pd.DataFrame(columns=df.columns)  # empty set
         t0 = time.time()
         df0 = df.fillna(0)
         iso = IsolationForest(n_jobs=-1).fit(df0)
@@ -865,13 +867,6 @@ class TreetopServer():
     
         return (train_X, train_y, test_X, test_y, time_cv, timestr)
  
-    @staticmethod
-    def confidence_level(actual, predicted):
-        difference = abs(predicted - actual)
-        if difference == 0:
-            return 1  # avoid divide-by-zero, highly confident
-        return 1.0 - (difference / actual)
-
     def prepare_models(self):
         # given a specific self.timestamp identifying the target record
         # train ensemble model and update metrics
@@ -909,10 +904,6 @@ class TreetopServer():
 
         # TODO: time series cross validation:
         #https://xgboost.readthedocs.io/en/stable/python/sklearn_estimator.html
-
-        # TODO: confidence
-        value = self.values.lookup_mapping("inferring.output.confidence", None)
-        self.values.set(value, 0.9723569201)
 
         return model, train_X, train_y, test_X, test_y
 
@@ -985,9 +976,25 @@ class TreetopServer():
                 break
             count += 1
 
+    def confidence_level(self, model, target, test_X, test_y):
+        """ Make prediction using latest values and compare to ground truth """
+        goal = test_y.iloc[-1][target]
+        pred = model.predict(test_X)[0]
+        diff = abs(pred - goal)
+        if diff == 0:
+            ratio = 1  # avoid divide-by-zero, highly confident
+        else:
+            ratio = 1.0 - (diff / goal)
+        print('Confidence: %.5f' % (ratio * 100.0))
+        value = self.values.lookup_mapping("inferring.output.confidence", None)
+        self.values.set(value, ratio * 100.0)
+
     def explain_models(self, model, train_X, train_y, test_X, test_y):
         # Generate feature importance measures and update metrics.
         # Perform feature permutation assessment and update metrics.
+
+        # Firstly, calculate and export a confidence level for the model
+        self.confidence_level(model, self.target(), test_X, test_y)
 
         booster = model.get_booster()   # non-scikit-learn XGBoost model
         #print('Rounds', booster.num_boosted_rounds())

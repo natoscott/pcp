@@ -35,12 +35,9 @@ from cmmv import ( MMV_SEM_INSTANT, MMV_SEM_DISCRETE, MMV_SEM_COUNTER,
                    MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_STRING,
                    MMV_FLAG_SENTINEL )
 
-try:
-    import interpretability_module as interp
-    from utils import local_diffi_batch
-    anomaly_explanations = True
-except ImportError:
-    anomaly_explanations = False
+# TODO: move inline? not alot of code in here
+import interpretability_module as interp
+from utils import local_diffi_batch
 
 permutation_importance = False # toggle, expensive to calculate though
 try:
@@ -620,7 +617,7 @@ class TreetopServer():
             refresh_metrics = self.pmconfig.fetch()
             if refresh_metrics < 0:
                 break
-            print('Sampling at:', self.pmfg_ts())
+            #print('Sampling at:', self.pmfg_ts())
             result = self.pmconfig.get_ranked_results(valid_only=True)
             self.append_sample(count, result)
 
@@ -741,8 +738,6 @@ class TreetopServer():
 
     def anomaly_features(self, df):
         """ anomaly feature engineering - add up to a limit of new features """
-        if not anomaly_explanations:
-            return pd.DataFrame(columns=df.columns)  # empty set
         t0 = time.time()
         df0 = df.fillna(0)
         iso = IsolationForest(n_jobs=-1).fit(df0)
@@ -751,7 +746,7 @@ class TreetopServer():
                                                  self._max_anomaly_features)
         t1 = time.time()
         print('Anomaly time:', t1 - t0)
-        print('Anomaly features:', len(anomalies_df))
+        print('Anomaly features:', len(anomalies_df.columns))
         value = self.values.lookup_mapping("features.anomalies", None)
         self.values.set(value,  len(anomalies_df))
         return anomalies_df
@@ -880,30 +875,25 @@ class TreetopServer():
         print("Target metric:", self.target())
         filtered = self.filter().split(',')
         print("Filter metrics:", filtered)
+
+        # TODO - drop time series CV - proving ineffective, costly
         (train_X, train_y, test_X, test_y, time_cv, timestr) = \
             self.prepare_split(self.target(), filtered, verbose=1)
 
-        learner_params = {
-            "tree_method": "hist",
-            "booster": "gbtree",
-            "objective": "reg:squarederror",
-            "eval_metric": "mae",  # "mse", "mape"
-            "eta": 0.075,
-            "max_depth": [4, 5, 6, 7, 8, 9],
-            "min_child_weight": 1,
-            "subsample": 1.0,
-            "colsample_bytree": 1.0,
-            "n_jobs": -1,
-            "seed": 1,
-            "verbosity": 0,
-        }
-
-        stop = xgb.callback.EarlyStopping(2, metric_name='rmse', save_best=True)
-        model = xgb.XGBRegressor(callbacks=[stop])
-        model.fit(train_X, train_y, eval_set=[(test_X, test_y)])
-
-        # TODO: time series cross validation:
-        #https://xgboost.readthedocs.io/en/stable/python/sklearn_estimator.html
+        stop = xgb.callback.EarlyStopping(10, metric_name='rmse', save_best=True)
+        model = xgb.XGBRegressor(
+            tree_method="hist",
+            booster="gbtree",
+            eta=0.075,
+            max_depth=5,
+            min_child_weight=1,
+            subsample=1.0,
+            colsample_bytree=1.0,
+            callbacks=[stop],
+            n_jobs=-1,
+            #seed=1,
+        )
+        model.fit(train_X, train_y, eval_set=[(test_X, test_y)], verbose=0)
 
         return model, train_X, train_y, test_X, test_y
 
@@ -1009,7 +999,7 @@ class TreetopServer():
         feature_map = booster.get_score(importance_type=self._importance_type)
         top_features = sorted(feature_map.items(), key=lambda item: item[1])
         top_features = top_features[::-1][:self._max_features]
-        print('Columns', [item[0] for item in top_features])
+        print('Metrics', [item[0] for item in top_features])
         print('Importance', [item[1] for item in top_features])
         timer = time.time()
         for i, feature in enumerate(top_features):

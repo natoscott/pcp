@@ -20,15 +20,16 @@ static const int FeaturesMeter_attributes[] = {
 };
 
 static void FeaturesMeter_updateValues(Meter* this) {
-   int total, missing, variance;
-   Platform_getFeatures(&total, &missing, &variance);
+   int total, missing, mutual, variance;
+   Platform_getFeatures(&total, &mutual, &missing, &variance);
 
    this->total = MAXIMUM(total, this->total);
    this->values[0] = total == -1 ? NAN : total;
    this->values[1] = missing == -1 ? NAN : missing;
-   this->values[2] = variance == -1 ? NAN : variance;
+   this->values[2] = mutual == -1 ? NAN : missing;
+   this->values[3] = variance == -1 ? NAN : variance;
 
-   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%dtot %dvar %dnan", total, variance, missing);
+   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%dtot %dvar %dmi %dnan", total, variance, mutual, missing);
 }
 
 const MeterClass FeaturesMeter_class = {
@@ -39,7 +40,7 @@ const MeterClass FeaturesMeter_class = {
    .updateValues = FeaturesMeter_updateValues,
    .defaultMode = TEXT_METERMODE,
    .supportedModes = (1 << TEXT_METERMODE) | (1 << LED_METERMODE),
-   .maxItems = 3,
+   .maxItems = 4,
    .total = 256.0,
    .attributes = FeaturesMeter_attributes,
    .name = "Features",

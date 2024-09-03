@@ -205,39 +205,39 @@ static const char* Platform_metricNames[] = {
    [PCP_PROC_SMAPS_SWAPPSS] = "proc.smaps.swappss",
 
    [PCP_TARGET_METRIC] = "mmv.treetop.server.target.metric",
-   [PCP_TARGET_VALUESET] = "mmv.treetop.server.target.valueset",
    [PCP_TARGET_TIMESTAMP] = "mmv.treetop.server.target.timestamp",
-   [PCP_TRAINING_ELAPSED] = "mmv.treetop.server.training.elapsed_time",
-   [PCP_TRAINING_MUTUAL] = "mmv.treetop.server.training.mutual_information",
-   [PCP_TRAINING_MISSING] = "mmv.treetop.server.training.missing_values",
-   [PCP_TRAINING_VARIANCE] = "mmv.treetop.server.training.low_variance",
-   [PCP_TRAINING_FEATURES] = "mmv.treetop.server.training.total_features",
-   [PCP_TRAINING_COUNT] = "mmv.treetop.server.training.count",
-   [PCP_TRAINING_INTERVAL] = "mmv.treetop.server.training.interval",
-   [PCP_TRAINING_WINDOW] = "mmv.treetop.server.training.window",
+   [PCP_TARGET_VALUESET] = "mmv.treetop.server.target.valueset",
    [PCP_SAMPLING_COUNT] = "mmv.treetop.server.sampling.count",
    [PCP_SAMPLING_INTERVAL] = "mmv.treetop.server.sampling.interval",
    [PCP_SAMPLING_ELAPSED] = "mmv.treetop.server.sampling.elapsed_time",
-   [PCP_CONFIDENCE_SCORE] = "mmv.treetop.server.inferring.output.confidence",
-   [PCP_OUTPUT_FEATURES] = "mmv.treetop.server.inferring.output.features",
-   [PCP_OUTPUT_VALUES] = "mmv.treetop.server.inferring.output.values",
-   [PCP_INPUT_VALUES] = "mmv.treetop.server.inferring.input.values",
-   [PCP_TARGET_TIME] = "mmv.treetop.server.inferring.target_time",
+   [PCP_TRAINING_COUNT] = "mmv.treetop.server.training.count",
+   [PCP_TRAINING_INTERVAL] = "mmv.treetop.server.training.interval",
+   [PCP_TRAINING_WINDOW] = "mmv.treetop.server.training.window",
+   [PCP_TRAINING_BOOSTED] = "mmv.treetop.server.training.boosted_rounds",
+   [PCP_TRAINING_ELAPSED] = "mmv.treetop.server.training.elapsed_time",
+   [PCP_FEATURES_ANOMALIES] = "mmv.treetop.server.features.anomalies",
+   [PCP_FEATURES_MISSING] = "mmv.treetop.server.features.missing_values",
+   [PCP_FEATURES_MUTUALINFO] = "mmv.treetop.server.features.mutual_information",
+   [PCP_FEATURES_VARIANCE] = "mmv.treetop.server.features.variance",
+   [PCP_FEATURES_TOTAL] = "mmv.treetop.server.features.total",
+   [PCP_MODEL_CONFIDENCE] = "mmv.treetop.server.explaining.model.confidence",
+   [PCP_MODEL_FEATURES] = "mmv.treetop.server.explaining.model.features",
    [PCP_MODEL_IMPORTANCE] = "mmv.treetop.server.explaining.model.importance",
-   [PCP_MODEL_MUTUALINFO] = "mmv.treetop.server.explaining.model.mutual_information",
    [PCP_IMPORTANCE_TYPE] = "mmv.treetop.server.explaining.model.importance_type",
+   [PCP_MODEL_MUTUALINFO] = "mmv.treetop.server.explaining.model.mutual_information",
    [PCP_MODEL_FEATURES] = "mmv.treetop.server.explaining.model.features",
    [PCP_MODEL_ELAPSED] = "mmv.treetop.server.explaining.model.elapsed_time",
-   [PCP_SHAP_VALUES] = "mmv.treetop.server.explaining.shap.values",
    [PCP_SHAP_FEATURES] = "mmv.treetop.server.explaining.shap.features",
+   [PCP_SHAP_VALUES] = "mmv.treetop.server.explaining.shap.values",
+   [PCP_SHAP_MUTUALINFO] = "mmv.treetop.server.explaining.shap.mutual_information",
    [PCP_SHAP_ELAPSED] = "mmv.treetop.server.explaining.shap.elapsed_time",
-   [PCP_OPT_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
-   [PCP_OPTMIN_DIRECTION] = "mmv.treetop.server.optimising.minima.direction",
-   [PCP_OPTMIN_CHANGE] = "mmv.treetop.server.optimising.minima.change",
-   [PCP_OPTMIN_FEATURES] = "mmv.treetop.server.optimising.minima.features",
-   [PCP_OPTMAX_DIRECTION] = "mmv.treetop.server.optimising.maxima.direction",
    [PCP_OPTMAX_CHANGE] = "mmv.treetop.server.optimising.maxima.change",
+   [PCP_OPTMAX_DIRECTION] = "mmv.treetop.server.optimising.maxima.direction",
    [PCP_OPTMAX_FEATURES] = "mmv.treetop.server.optimising.maxima.features",
+   [PCP_OPTMIN_CHANGE] = "mmv.treetop.server.optimising.minima.change",
+   [PCP_OPTMIN_DIRECTION] = "mmv.treetop.server.optimising.minima.direction",
+   [PCP_OPTMIN_FEATURES] = "mmv.treetop.server.optimising.minima.features",
+   [PCP_OPTIMA_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
 
    [PCP_METRIC_COUNT] = NULL
 };
@@ -426,22 +426,26 @@ void Platform_setBindings(Htop_Action* keys) {
 
 double Platform_getConfidence(void) {
    pmAtomValue value;
-   if (Metric_values(PCP_CONFIDENCE_SCORE, &value, 1, PM_TYPE_DOUBLE) == NULL)
+   if (Metric_values(PCP_MODEL_CONFIDENCE, &value, 1, PM_TYPE_DOUBLE) == NULL)
       return 0.0;
    return value.d;
 }
 
-void Platform_getFeatures(int* total, int* missing, int* variance) {
+void Platform_getFeatures(int* total, int* missing, int* mutual, int* variance) {
    pmAtomValue value;
-   if (Metric_values(PCP_TRAINING_FEATURES, &value, 1, PM_TYPE_32) == NULL)
+   if (Metric_values(PCP_FEATURES_TOTAL, &value, 1, PM_TYPE_32) == NULL)
       *total = -1;
    else
       *total = value.l;
-   if (Metric_values(PCP_TRAINING_MISSING, &value, 1, PM_TYPE_32) == NULL)
+   if (Metric_values(PCP_FEATURES_MISSING, &value, 1, PM_TYPE_32) == NULL)
       *missing = -1;
    else
       *missing = value.l;
-   if (Metric_values(PCP_TRAINING_VARIANCE, &value, 1, PM_TYPE_32) == NULL)
+   if (Metric_values(PCP_FEATURES_MUTUALINFO, &value, 1, PM_TYPE_32) == NULL)
+      *mutual = -1;
+   else
+      *mutual = value.l;
+   if (Metric_values(PCP_FEATURES_VARIANCE, &value, 1, PM_TYPE_32) == NULL)
       *variance = -1;
    else
       *variance = value.l;
@@ -464,7 +468,7 @@ int Platform_getElapsedTimes(double* values, int count) {
    Metric_values(PCP_SHAP_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
    values[i++] = value.d;
    if (i == count) return i;
-   Metric_values(PCP_OPT_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
+   Metric_values(PCP_OPTIMA_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
    values[i++] = value.d;
    return i;
 }

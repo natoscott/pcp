@@ -74,7 +74,7 @@ void Platform_setBindings(Htop_Action* keys);
 
 double Platform_getConfidence(void);
 
-void Platform_getFeatures(int* total, int* missing, int* variance);
+void Platform_getFeatures(int* total, int* missing, int* mutual, int* variance);
 
 double Platform_getSampleInterval(void);
 

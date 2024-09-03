@@ -27,37 +27,36 @@ typedef enum Metric_ {
    PCP_TARGET_METRIC,		/* treetop.server.target.metric */
    PCP_TARGET_TIMESTAMP,	/* treetop.server.target.timestamp */
    PCP_TARGET_VALUESET,		/* treetop.server.target.valueset */
-   PCP_TRAINING_ELAPSED,	/* treetop.server.training.elapsed_time */
-   PCP_TRAINING_MUTUAL,		/* treetop.server.training.mutual_information */
-   PCP_TRAINING_MISSING,	/* treetop.server.training.missing_values */
-   PCP_TRAINING_VARIANCE,	/* treetop.server.training.low_variance */
-   PCP_TRAINING_FEATURES,	/* treetop.server.training.total_features */
-   PCP_TRAINING_COUNT,		/* treetop.server.training.count */
-   PCP_TRAINING_INTERVAL,	/* treetop.server.training.interval */
-   PCP_TRAINING_WINDOW,		/* treetop.server.training.window */
    PCP_SAMPLING_COUNT,		/* treetop.server.sampling.count */
    PCP_SAMPLING_INTERVAL,	/* treetop.server.sampling.interval */
    PCP_SAMPLING_ELAPSED,	/* treetop.server.sampling.elapsed_time */
-   PCP_CONFIDENCE_SCORE,	/* treetop.server.inferring.output.confidence */
-   PCP_OUTPUT_FEATURES,		/* treetop.server.inferring.output.features */
-   PCP_OUTPUT_VALUES,		/* treetop.server.inferring.output.values */
-   PCP_INPUT_VALUES,		/* treetop.server.inferring.input.values */
-   PCP_TARGET_TIME,		/* treetop.server.inferring.target_time */
-   PCP_MODEL_IMPORTANCE,	/* treetop.server.explaining.model.importance */
-   PCP_MODEL_MUTUALINFO,	/* treetop.server.explaining.model.mutual_information */
-   PCP_IMPORTANCE_TYPE,		/* treetop.server.explaining.model.importance_type */
+   PCP_TRAINING_COUNT,		/* treetop.server.training.count */
+   PCP_TRAINING_INTERVAL,	/* treetop.server.training.interval */
+   PCP_TRAINING_WINDOW,		/* treetop.server.training.window */
+   PCP_TRAINING_BOOSTED,	/* treetop.server.training.boosted_rounds */
+   PCP_TRAINING_ELAPSED,	/* treetop.server.training.elapsed_time */
+   PCP_FEATURES_ANOMALIES,	/* treetop.server.features.anomalies */
+   PCP_FEATURES_MISSING,	/* treetop.server.features.missing_values */
+   PCP_FEATURES_MUTUALINFO,	/* treetop.server.features.mutual_information */
+   PCP_FEATURES_VARIANCE,	/* treetop.server.features.variance */
+   PCP_FEATURES_TOTAL,		/* treetop.server.features.total */
+   PCP_MODEL_CONFIDENCE,	/* treetop.server.explaining.model.confidence */
    PCP_MODEL_FEATURES,		/* treetop.server.explaining.model.features */
+   PCP_MODEL_IMPORTANCE,	/* treetop.server.explaining.model.importance */
+   PCP_IMPORTANCE_TYPE,		/* treetop.server.explaining.model.importance_type */
+   PCP_MODEL_MUTUALINFO,	/* treetop.server.explaining.model.mutual_information */
    PCP_MODEL_ELAPSED,		/* treetop.server.explaining.model.elapsed_time */
-   PCP_SHAP_VALUES,		/* treetop.server.explaining.shap.values */
    PCP_SHAP_FEATURES,		/* treetop.server.explaining.shap.features */
+   PCP_SHAP_VALUES,		/* treetop.server.explaining.shap.values */
+   PCP_SHAP_MUTUALINFO,		/* treetop.server.explaining.shap.mutual_information */
    PCP_SHAP_ELAPSED,		/* treetop.server.explaining.shap.elapsed_time */
-   PCP_OPT_ELAPSED,		/* treetop.server.optimising.elapsed_time */
-   PCP_OPTMIN_DIRECTION,	/* treetop.server.optimising.minima.direction */
-   PCP_OPTMIN_CHANGE,		/* treetop.server.optimising.minima.change */
-   PCP_OPTMIN_FEATURES,		/* treetop.server.optimising.minima.features */
-   PCP_OPTMAX_DIRECTION,	/* treetop.server.optimising.maxima.direction */
    PCP_OPTMAX_CHANGE,		/* treetop.server.optimising.maxima.change */
+   PCP_OPTMAX_DIRECTION,	/* treetop.server.optimising.maxima.direction */
    PCP_OPTMAX_FEATURES,		/* treetop.server.optimising.maxima.features */
+   PCP_OPTMIN_CHANGE,		/* treetop.server.optimising.minima.change */
+   PCP_OPTMIN_DIRECTION,	/* treetop.server.optimising.minima.direction */
+   PCP_OPTMIN_FEATURES,		/* treetop.server.optimising.minima.features */
+   PCP_OPTIMA_ELAPSED,		/* treetop.server.optimising.elapsed_time */
 
    PCP_HINV_NCPU,               /* hinv.ncpu */
    PCP_HINV_CPUCLOCK,           /* hinv.cpu.clock */

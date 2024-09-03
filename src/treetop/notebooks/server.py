@@ -210,8 +210,6 @@ class TreetopServer():
             class.  Sampled by the treetop-client process for the
             servers results for training, predicting & explaining.
         """
-        model_types = [mmv.mmv_instance(0, "predictions"),
-                       mmv.mmv_instance(1, "anomalies")]
         model_features, permutation_features, shap_features = [], [], []
         optmin_features, optmax_features = [], []
         for feature in range(self._max_features):
@@ -222,30 +220,26 @@ class TreetopServer():
             optmax_features.append(mmv.mmv_instance(feature, instance))
             optmin_features.append(mmv.mmv_instance(feature, instance))
         indoms = [mmv.mmv_indom(serial = 1,
-                    shorttext = "Model algorithms",
-                    helptext = "Set of algorithms used for modelling"),
-                  mmv.mmv_indom(serial = 2,
                     shorttext = "Model-based feature importance",
                     helptext = "Set of important features found by modeling"),
-                  mmv.mmv_indom(serial = 3,
+                  mmv.mmv_indom(serial = 2,
                     shorttext = "Permutation-based feature importance",
                     helptext = "Set of important features found by permutation"),
-                  mmv.mmv_indom(serial = 4,
+                  mmv.mmv_indom(serial = 3,
                     shorttext = "SHAP-based feature importance",
                     helptext = "Set of important features found by SHAP"),
-                  mmv.mmv_indom(serial = 5,
+                  mmv.mmv_indom(serial = 4,
                     shorttext = "Maxima-perturbed optimisation feature importance",
                     helptext = "Set of important optimisation features found by maxima perturbation"),
-                  mmv.mmv_indom(serial = 6,
+                  mmv.mmv_indom(serial = 5,
                     shorttext = "Minima-perturbed optimisation feature importance",
                     helptext = "Set of important optimisation features found by minima perturbation"),
                  ]
-        indoms[0].set_instances(model_types)
-        indoms[1].set_instances(model_features)
-        indoms[2].set_instances(permutation_features)
-        indoms[3].set_instances(shap_features)
-        indoms[4].set_instances(optmax_features)
-        indoms[5].set_instances(optmin_features)
+        indoms[0].set_instances(model_features)
+        indoms[1].set_instances(permutation_features)
+        indoms[2].set_instances(shap_features)
+        indoms[3].set_instances(optmax_features)
+        indoms[4].set_instances(optmin_features)
 
         metrics = [mmv.mmv_metric(name = "target.metric",
                               item = 1,
@@ -254,123 +248,8 @@ class TreetopServer():
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               shorttext = "Prediction targets",
                               helptext = "Predicted and explained metrics"),
-                   mmv.mmv_metric(name = "explaining.model.importance_type",
-                              item = 2,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_DISCRETE,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              shorttext = "Feature importance type",
-                              helptext = "Feature importance type "
-                                  "('weight', 'gain', 'cover', 'SHAP')"),
-                   mmv.mmv_metric(name = "explaining.model.features",
-                              item = 3,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 2,
-                              shorttext = "Names of most important features",
-                              helptext = "Most important features "
-                                  "(metric instance name pairs, anomalies)"),
-                   mmv.mmv_metric(name = "explaining.model.mutual_information",
-                              item = 4,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 2,
-                              shorttext = "Mutual information for features",
-                              helptext = "Mutual information between each "
-                                  "important feature and target variables)"),
-                   mmv.mmv_metric(name = "explaining.model.importance",
-                              item = 5,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 2,
-                              shorttext = "Most important feature rankings."),
-                   mmv.mmv_metric(name = "models",
-                              item = 6,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 1,
-                              shorttext = "Algorithms used for modelling"),
-
-                   mmv.mmv_metric(name = "training.window",
-                              item = 7,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Training window size in seconds"),
-                   mmv.mmv_metric(name = "training.interval",
-                              item = 8,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Training interval in seconds"),
-                   mmv.mmv_metric(name = "training.count",
-                              item = 9,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_COUNTER,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of training iterations completed"),
-                   mmv.mmv_metric(name = "sampling.interval",
-                              item = 10,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Training data sampling interval"),
-                   mmv.mmv_metric(name = "sampling.count",
-                              item = 11,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of samples in the training set"),
-                   mmv.mmv_metric(name = "features.total",
-                              item = 12,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of features in the training set"),
-                   mmv.mmv_metric(name = "features.low_variance",
-                              item = 13,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of features with low variance"),
-                   mmv.mmv_metric(name = "features.missing_values",
-                              item = 14,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of features with missing values"),
-                   mmv.mmv_metric(name = "features.mutual_information",
-                              item = 15,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of features with sufficient mutual information"),
-                   mmv.mmv_metric(name = "features.anomalies",
-                              item = 38,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Count of total anomaly detection features"),
-                   mmv.mmv_metric(name = "sampling.elapsed_time",
-                              item = 16,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time to fetch metric values",
-                              helptext = "Sampling time during dataset preparation"),
-                   mmv.mmv_metric(name = "training.elapsed_time",
-                              item = 17,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time to train models",
-                              helptext = "Elapsed time during model training"),
                    mmv.mmv_metric(name = "target.timestamp",
-                              item = 18,
+                              item = 2,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
@@ -378,95 +257,190 @@ class TreetopServer():
                               helptext = "Timestamp string providing target "
                                   "time for inference and explanations."),
                    mmv.mmv_metric(name = "target.valueset",
-                              item = 19,
+                              item = 3,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               shorttext = "Target values preceding timestamp",
                               helptext = "Comma-separated values for target "
                                   "up to and including the current sample."),
-                   mmv.mmv_metric(name = "inferring.output.value",
+                   mmv.mmv_metric(name = "sampling.count",
+                              item = 4,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of samples in the training set"),
+                   mmv.mmv_metric(name = "sampling.interval",
+                              item = 5,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Training data sampling interval"),
+                   mmv.mmv_metric(name = "sampling.elapsed_time",
+                              item = 6,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Time to fetch metric values",
+                              helptext = "Sampling time during dataset preparation"),
+                   mmv.mmv_metric(name = "training.count",
+                              item = 7,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_COUNTER,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of training iterations completed"),
+                   mmv.mmv_metric(name = "training.interval",
+                              item = 8,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Training interval in seconds"),
+                   mmv.mmv_metric(name = "training.window",
+                              item = 9,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Training window size in seconds"),
+                   mmv.mmv_metric(name = "training.boosted_rounds",
+                              item = 10,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Number of XGBoost iterations of boosting"),
+                   mmv.mmv_metric(name = "training.elapsed_time",
+                              item = 11,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Time to train models",
+                              helptext = "Elapsed time during model training"),
+                   mmv.mmv_metric(name = "features.anomalies",
+                              item = 12,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of total anomaly detection features"),
+                   mmv.mmv_metric(name = "features.missing_values",
+                              item = 13,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of features with missing values"),
+                   mmv.mmv_metric(name = "features.mutual_information",
+                              item = 14,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of features with sufficient mutual information"),
+                   mmv.mmv_metric(name = "features.variance",
+                              item = 15,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of features with sufficient variance"),
+                   mmv.mmv_metric(name = "features.total",
+                              item = 16,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Count of features in the training set"),
+                   mmv.mmv_metric(name = "explaining.model.confidence",
+                              item = 17,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Model confidence from prediction accuracy"),
+                   mmv.mmv_metric(name = "explaining.model.features",
+                              item = 18,
+                              typeof = MMV_TYPE_STRING,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 1,
+                              shorttext = "Names of most important features",
+                              helptext = "Most important features "
+                                  "(metric instance name pairs, anomalies)"),
+                   mmv.mmv_metric(name = "explaining.model.importance",
+                              item = 19,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 1,
+                              shorttext = "Most important feature rankings."),
+                   mmv.mmv_metric(name = "explaining.model.importance_type",
                               item = 20,
                               typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
+                              semantics = MMV_SEM_DISCRETE,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              shorttext = "Most recent result of inference"),
-                   mmv.mmv_metric(name = "inferring.output.features",
+                              shorttext = "Feature importance type",
+                              helptext = "XGBoost feature importance type "
+                                  "(one of 'weight', 'gain' or 'cover')"),
+                   mmv.mmv_metric(name = "explaining.model.mutual_information",
                               item = 21,
-                              typeof = MMV_TYPE_STRING,
+                              typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              shorttext = "Most recent features of inference"),
-                   mmv.mmv_metric(name = "inferring.output.confidence",
+                              indom = 1,
+                              shorttext = "Mutual information for features",
+                              helptext = "Mutual information between each "
+                                  "important feature and target variables)"),
+                   mmv.mmv_metric(name = "explaining.model.elapsed_time",
                               item = 22,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Prediction acconfidence"),
+                              shorttext = "Time for model-based explanations"),
                    mmv.mmv_metric(name = "explaining.pfi.features",
                               item = 23,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
+                              indom = 2,
                               shorttext = "Most important permutation features"),
                    mmv.mmv_metric(name = "explaining.pfi.mean",
                               item = 24,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
+                              indom = 2,
                               shorttext = "Mean score from feature permutation"),
                    mmv.mmv_metric(name = "explaining.pfi.std",
                               item = 25,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
+                              indom = 2,
                               shorttext = "Standard deviation from permutation"),
                    mmv.mmv_metric(name = "explaining.pfi.mutual_information",
-                              item = 39,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
-                              shorttext = "Mutual information for PFI features",
-                              helptext = "Mutual information for permutation"
-                                " feature importance (PFI) based explanation."),
-                   mmv.mmv_metric(name = "explaining.model.elapsed_time",
                               item = 26,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time for model-based explanations"),
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 2,
+                              shorttext = "Mutual information for PFI features",
+                              helptext = "Mutual information for permutation"
+                                " feature importance (PFI) based explanation."),
                    mmv.mmv_metric(name = "explaining.pfi.elapsed_time",
                               item = 27,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for permutation-based explanations"),
-                   mmv.mmv_metric(name = "explaining.shap.elapsed_time",
-                              item = 28,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time for SHAP-based explanations"),
                    mmv.mmv_metric(name = "explaining.shap.features",
-                              item = 29,
+                              item = 28,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 4,
+                              indom = 3,
                               shorttext = "SHAP important feature names"),
                    mmv.mmv_metric(name = "explaining.shap.value",
-                              item = 30,
+                              item = 29,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 4,
+                              indom = 3,
                               shorttext = "SHAP value, feature importance"),
                    mmv.mmv_metric(name = "explaining.shap.mutual_information",
-                              item = 40,
+                              item = 30,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
@@ -474,60 +448,60 @@ class TreetopServer():
                               shorttext = "Mutual information for SHAP importance",
                               helptext = "Mutual information for SHAP-based feature"
                                 " importance explanations (compared to target)."),
-                   mmv.mmv_metric(name = "optimising.maxima.features",
+                   mmv.mmv_metric(name = "explaining.shap.elapsed_time",
                               item = 31,
-                              typeof = MMV_TYPE_STRING,
+                              typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
-                              shorttext = "Max-perturbed optimisation feature names"),
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Time for SHAP-based explanations"),
                    mmv.mmv_metric(name = "optimising.maxima.change",
                               item = 32,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
+                              indom = 4,
                               shorttext = "Max-perturned optimisation delta"),
                    mmv.mmv_metric(name = "optimising.maxima.direction",
                               item = 33,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
+                              indom = 4,
                               shorttext = "Max-perturbed optimisation feature change direction"),
-                   mmv.mmv_metric(name = "optimising.minima.features",
+                   mmv.mmv_metric(name = "optimising.maxima.features",
                               item = 34,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 6,
-                              shorttext = "Min-perturbed optimisation feature names"),
+                              indom = 4,
+                              shorttext = "Max-perturbed optimisation feature names"),
                    mmv.mmv_metric(name = "optimising.minima.change",
                               item = 35,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 6,
+                              indom = 5,
                               shorttext = "Min-perturbed optimisation delta"),
                    mmv.mmv_metric(name = "optimising.minima.direction",
                               item = 36,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 6,
+                              indom = 5,
                               shorttext = "Min-perturbed optimisation feature change direction"),
-                   mmv.mmv_metric(name = "optimising.elapsed_time",
+                   mmv.mmv_metric(name = "optimising.minima.features",
                               item = 37,
+                              typeof = MMV_TYPE_STRING,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 5,
+                              shorttext = "Min-perturbed optimisation feature names"),
+                   mmv.mmv_metric(name = "optimising.elapsed_time",
+                              item = 38,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for permutation-based optimisation explanation"),
-                   mmv.mmv_metric(name = "explaining.model.boosted_rounds",
-                              item = 41,
-                              typeof = MMV_TYPE_U32,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
-                              shorttext = "Number of XGBoost iterations of boosting"),
                   ]
 
         values = mmv.MemoryMappedValues("treetop.server",
@@ -847,8 +821,8 @@ class TreetopServer():
         print('Variance time:', t1 - t0)
         keep = cull.get_feature_names_out()
         print('Keeping', len(keep), 'of', train_X.shape[1], 'columns with variance')
-        value = self.values.lookup_mapping("features.low_variance", None)
-        self.values.set(value, train_X.shape[1] - len(keep))
+        value = self.values.lookup_mapping("features.variance", None)
+        self.values.set(value, len(keep))
         return train_X[keep]
 
     def reduce_with_mutual_info(self, train_y, train_X):
@@ -872,6 +846,9 @@ class TreetopServer():
         keep = (mi > self._mutualinfo_threshold).sum()
         cols = train_X.shape[1]
         print('Keeping', keep, 'of', cols, 'columns with mutual information')
+        value = self.values.lookup_mapping("features.mutual_information", None)
+        self.values.set(value, keep)
+
         indices = np.where(cull)
         clean_X = clean_X.drop(clean_X.columns[indices], axis=1)
         return train_X[clean_X.columns]  # undo NaN->0
@@ -898,8 +875,6 @@ class TreetopServer():
     
         # automated feature engineering based on time
         times_X = self.timestamp_features(window['timestamp'])
-        if verbose: print('times_X shape:', times_X.shape)
-        if verbose: print('times_X index:', times_X.index)
 
         # extract sample (prediction) timestamp
         clean_y = clean_X.loc[:, targets]
@@ -1015,6 +990,15 @@ class TreetopServer():
             if count >= self._max_features: # remainder decreasing
                 break
             count += 1
+        while count < self._max_features:  # clear any remaining instances
+            inst = str(count)
+            value = v.lookup_mapping("optimising." + name + ".features", inst)
+            v.set_string(value, '')
+            value = v.lookup_mapping("optimising." + name + ".change", inst)
+            v.set(value, self.NaN)
+            value = v.lookup_mapping("optimising." + name + ".direction", inst)
+            v.set_string(value, '')
+            count = count + 1
 
     def optimise(self, model, train_X, train_y, test_X, test_y):
         print('Calculating optimisation importance')
@@ -1058,7 +1042,7 @@ class TreetopServer():
         else:
             ratio = 1.0 - (diff / goal)
         print('Confidence: %.5f' % (ratio * 100.0))
-        value = self.values.lookup_mapping("inferring.output.confidence", None)
+        value = self.values.lookup_mapping("explaining.model.confidence", None)
         self.values.set(value, ratio * 100.0)
 
     def model_importance(self, model):
@@ -1116,27 +1100,33 @@ class TreetopServer():
             inst = str(count)
             name = train_X.columns[i]  # feature name
             shapv = explanation[0, i]  # SHAP value
-            if shapv == 0: shapv = self.NaN
+            if shapv == 0:
+                iname = ''
+                shapv = self.NaN
+                mutual = self.NaN
+            else:
+                mutual = self.mutualinfo[name].item()
+                iname = metricspec(name)
             value = v.lookup_mapping("explaining.shap.features", inst)
-            v.set_string(value, metricspec(name))
+            v.set_string(value, iname)
             value = v.lookup_mapping("explaining.shap.value", inst)
             v.set(value, shapv)
             value = v.lookup_mapping("explaining.shap.mutual_information", inst)
-            v.set(value, self.mutualinfo[name].item())
+            v.set(value, mutual)
             if count >= self._max_features:
                 break
             count += 1
         timer = self.elapsed(timer, "explaining.shap.elapsed_time")
-        print('Finished SHAP importance in %.5f seconds [%d]' % (timer, i+1))
-        while i < self._max_features:  # clear any remaining instances
-            inst = str(i + 1)
+        print('Finished SHAP importance in %.5f seconds [%d]' % (timer, count))
+        while count < self._max_features:  # clear any remaining instances
+            inst = str(count)
             value = v.lookup_mapping("explaining.shap.features", inst)
             v.set_string(value, '')
             value = v.lookup_mapping("explaining.shap.value", inst)
             v.set(value, self.NaN)
             value = v.lookup_mapping("explaining.shap.mutual_information", inst)
             v.set(value, self.NaN)
-            i = i + 1
+            count = count + 1
 
     def permutation_feature_importance(self, model, train_X, train_y):
         if not permutation_importance:
@@ -1155,9 +1145,7 @@ class TreetopServer():
             inst = str(count)
             name = train_X.columns[i]
             pfi_mean = pfi.importances_mean[i]
-            if pfi_mean == 0: pfi_mean = self.NaN
             pfi_std = pfi.importances_std[i]
-            if pfi_std == 0: pfi_std = self.NaN
             value = v.lookup_mapping("explaining.pfi.features", inst)
             v.set_string(value, metricspec(name))
             value = v.lookup_mapping("explaining.pfi.mean", inst)
@@ -1171,8 +1159,8 @@ class TreetopServer():
             count += 1
         timer = self.elapsed(timer, "explaining.pfi.elapsed_time")
         print('Finished permutation importance in %.5f seconds' % (timer))
-        while i < self._max_features:  # clear any remaining instances
-            inst = str(i + 1)
+        while count < self._max_features:  # clear any remaining instances
+            inst = str(count)
             value = v.lookup_mapping("explaining.pfi.features", inst)
             v.set_string(value, '')
             value = v.lookup_mapping("explaining.pfi.mean", inst)
@@ -1181,7 +1169,7 @@ class TreetopServer():
             v.set(value, self.NaN)
             value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
             v.set(value, self.NaN)
-            i = i + 1
+            count = count + 1
 
     def explain_models(self, model, train_X, train_y, test_X, test_y):
         """ Generate feature importance measures and update metrics. """

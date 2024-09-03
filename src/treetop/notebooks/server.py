@@ -87,10 +87,9 @@ class TreetopServer():
         self.client = None
         self.source = None
         self.datasets = None
-        self.mutualinfo = None
-        self.speclocal = None
         self.start_time = None
         self.end_time = None
+        self.mutualinfo = None
         self.NaN = float("nan")
 
         # pmconfig state
@@ -341,35 +340,44 @@ class TreetopServer():
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Prediction accuracy confidence"),
-                   mmv.mmv_metric(name = "explaining.permutation.features",
+                              shorttext = "Prediction acconfidence"),
+                   mmv.mmv_metric(name = "explaining.pfi.features",
                               item = 23,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 3,
                               shorttext = "Most important permutation features"),
-                   mmv.mmv_metric(name = "explaining.permutation.mean",
+                   mmv.mmv_metric(name = "explaining.pfi.mean",
                               item = 24,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 3,
                               shorttext = "Mean score from feature permutation"),
-                   mmv.mmv_metric(name = "explaining.permutation.std",
+                   mmv.mmv_metric(name = "explaining.pfi.std",
                               item = 25,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 3,
                               shorttext = "Standard deviation from permutation"),
+                   mmv.mmv_metric(name = "explaining.pfi.mutual_information",
+                              item = 39,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 3,
+                              shorttext = "Mutual information for PFI features",
+                              helptext = "Mutual information for permutation"
+                                " feature importance (PFI) based explanation."),
                    mmv.mmv_metric(name = "explaining.model.elapsed_time",
                               item = 26,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for model-based explanations"),
-                   mmv.mmv_metric(name = "explaining.permutation.elapsed_time",
+                   mmv.mmv_metric(name = "explaining.pfi.elapsed_time",
                               item = 27,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
@@ -395,6 +403,15 @@ class TreetopServer():
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 4,
                               shorttext = "SHAP value, feature importance"),
+                   mmv.mmv_metric(name = "explaining.shap.mutual_information",
+                              item = 40,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 3,
+                              shorttext = "Mutual information for SHAP importance",
+                              helptext = "Mutual information for SHAP-based feature"
+                                " importance explanations (compared to target)."),
                    mmv.mmv_metric(name = "optimising.maxima.features",
                               item = 31,
                               typeof = MMV_TYPE_STRING,
@@ -523,8 +540,7 @@ class TreetopServer():
     def source_connect(self):
         try:
             log = self.datasets[0]
-            ctx, src = pmapi.pmContext.set_connect_options(self.opts, log,
-                                                           self.speclocal)
+            ctx, src = pmapi.pmContext.set_connect_options(self.opts, log, None)
             self.pmfg = pmapi.fetchgroup(ctx, src)
             self.pmfg_ts = self.pmfg.extend_timestamp()
             self.context = self.pmfg.get_context()
@@ -865,13 +881,12 @@ class TreetopServer():
     def prepare_models(self):
         # given a specific self.timestamp identifying the target record
         # train ensemble model and update metrics
-        # - prepare separate training, validation and testing datasets.
-        # - perform feature reduction via variance, mutual information.
         # - prepare IsolationForest anomaly detection model and use it.
         # - perform DIFFI calculations & append columns to the dataset.
         # - perform time-based feature engineering & append to dataset.
-        # - prepare timeseries cross-validation datasets for training.
-        # - train XGBoost models
+        # - perform feature reduction via variance, mutual information.
+        # - prepare separate training, validation and testing datasets.
+        # - train XGBoost regression model for prediction/explanations.
         print("Target metric:", self.target())
         filtered = self.filter().split(',')
         print("Filter metrics:", filtered)
@@ -880,7 +895,7 @@ class TreetopServer():
         (train_X, train_y, test_X, test_y, time_cv, timestr) = \
             self.prepare_split(self.target(), filtered, verbose=1)
 
-        stop = xgb.callback.EarlyStopping(10, metric_name='rmse', save_best=True)
+        early = xgb.callback.EarlyStopping(10, metric_name='rmse', save_best=True)
         model = xgb.XGBRegressor(
             tree_method="hist",
             booster="gbtree",
@@ -889,7 +904,7 @@ class TreetopServer():
             min_child_weight=1,
             subsample=1.0,
             colsample_bytree=1.0,
-            callbacks=[stop],
+            callbacks=[early],
             n_jobs=-1,
             #seed=1,
         )
@@ -933,16 +948,13 @@ class TreetopServer():
             inst = str(count)
             change = df_inc.iloc[i][column]
             if change == 0: change = self.NaN
-            feature = metricspec(df_inc.iloc[i]['feature'])
+            feature = df_inc.iloc[i]['feature']
             value = v.lookup_mapping("optimising." + name + ".features", inst)
-            v.set_string(value, feature)
+            v.set_string(value, metricspec(feature))
             value = v.lookup_mapping("optimising." + name + ".change", inst)
             v.set(value, change)
             value = v.lookup_mapping("optimising." + name + ".direction", inst)
             v.set_string(value, "increase")
-            #i = self.mutual_column(mutuals, feature)
-            #value = v.lookup_mapping("optimising."+name+".mutual", inst)
-            #v.set(value, mutual_information[i])
             if count >= int(self._max_features / 2): # first half increasing
                 break
             count += 1
@@ -952,16 +964,13 @@ class TreetopServer():
             inst = str(count)
             change = df_dec.iloc[i][column]
             if change == 0: change = self.NaN
-            feature = metricspec(df_dec.iloc[i]['feature'])
+            feature = df_dec.iloc[i]['feature']
             value = v.lookup_mapping("optimising." + name + ".features", inst)
-            v.set_string(value, feature)
+            v.set_string(value, metricspec(feature))
             value = v.lookup_mapping("optimising." + name + ".change", inst)
             v.set(value, change)
             value = v.lookup_mapping("optimising." + name + ".direction", inst)
             v.set_string(value, "decrease")
-            #i = self.mutual_column(mutuals, feature)
-            #value = v.lookup_mapping("optimising."+name+".mutual", inst)
-            #v.set(value, mutual_information[i])
             if count >= self._max_features: # remainder decreasing
                 break
             count += 1
@@ -1004,16 +1013,26 @@ class TreetopServer():
         timer = time.time()
         for i, feature in enumerate(top_features):
             inst = str(i)
-            topfv = top_features[i][1]
-            if topfv == 0: topfv = self.NaN
+            topfn = feature[0]  # feature name
+            topfv = feature[1]  # feature value
+            topmi = self.mutualinfo[topfn].item()
             value = v.lookup_mapping("explaining.model.features", inst)
-            v.set_string(value, metricspec(top_features[i][0]))
+            v.set_string(value, metricspec(topfn))
             value = v.lookup_mapping("explaining.model.importance", inst)
             v.set(value, topfv)
-            #value = v.lookup_mapping("explaining.model.mutual", inst)
-            #v.set(value, mutual_information[i])
+            value = v.lookup_mapping("explaining.model.mutual_information", inst)
+            v.set(value, topmi)
         timer = self.elapsed(timer, "explaining.model.elapsed_time")
-        print('Finished model importance in %.5f seconds' % (timer))
+        print('Finished model importance in %.5f seconds [%d]' % (timer, i+1))
+        while i < self._max_features:  # clear any remaining instances
+            inst = str(i + 1)
+            value = v.lookup_mapping("explaining.model.features", inst)
+            v.set_string(value, '')
+            value = v.lookup_mapping("explaining.model.importance", inst)
+            v.set(value, self.NaN)
+            value = v.lookup_mapping("explaining.model.mutual_information", inst)
+            v.set(value, self.NaN)
+            i = i + 1
 
         # Importance from optimisation measures
         print('Calculating optimisation importance')
@@ -1030,19 +1049,29 @@ class TreetopServer():
             count = 0
             for i in explanation.argsort()[0, ::-1]:
                 inst = str(count)
-                shapv = explanation[0, i]
+                name = train_X.columns[i]  # feature name
+                shapv = explanation[0, i]  # SHAP value
                 if shapv == 0: shapv = self.NaN
                 value = v.lookup_mapping("explaining.shap.features", inst)
-                v.set_string(value, metricspec(train_X.columns[i]))
+                v.set_string(value, metricspec(name))
                 value = v.lookup_mapping("explaining.shap.value", inst)
                 v.set(value, shapv)
-                #value = v.lookup_mapping("explaining.shap.mutual", inst)
-                #v.set(value, mutual_information[i])
+                value = v.lookup_mapping("explaining.shap.mutual_information", inst)
+                v.set(value, self.mutualinfo[name].item())
                 if count >= self._max_features:
                     break
                 count += 1
             timer = self.elapsed(timer, "explaining.shap.elapsed_time")
-            print('Finished SHAP importance in %.5f seconds' % (timer))
+            print('Finished SHAP importance in %.5f seconds [%d]' % (timer, i+1))
+            while i < self._max_features:  # clear any remaining instances
+                inst = str(i + 1)
+                value = v.lookup_mapping("explaining.shap.features", inst)
+                v.set_string(value, '')
+                value = v.lookup_mapping("explaining.shap.value", inst)
+                v.set(value, self.NaN)
+                value = v.lookup_mapping("explaining.shap.mutual_information", inst)
+                v.set(value, self.NaN)
+                i = i + 1
         else:
             print('Skipping SHAP importance')
 
@@ -1057,22 +1086,23 @@ class TreetopServer():
                 if pfi.importances_mean[i] - 2 * pfi.importances_std[i] <= 0:
                     continue
                 inst = str(count)
+                name = train_X.columns[i]
                 pfi_mean = pfi.importances_mean[i]
                 if pfi_mean == 0: pfi_mean = self.NaN
                 pfi_std = pfi.importances_std[i]
                 if pfi_std == 0: pfi_std = self.NaN
-                value = v.lookup_mapping("explaining.permutation.features", inst)
-                v.set_string(value, metricspec(train_X.columns[i]))
-                value = v.lookup_mapping("explaining.permutation.mean", inst)
+                value = v.lookup_mapping("explaining.pfi.features", inst)
+                v.set_string(value, metricspec(name))
+                value = v.lookup_mapping("explaining.pfi.mean", inst)
                 v.set(value, pfi_mean)
-                value = v.lookup_mapping("explaining.permutation.std", inst)
+                value = v.lookup_mapping("explaining.pfi.std", inst)
                 v.set(value, pfi_std)
-                #value = v.lookup_mapping("explaining.permutation.mutual", inst)
-                #v.set(value, mutual_information[i])
+                value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
+                v.set(value, self.mutualinfo[name].item())
                 if count >= self._max_features:
                     break
                 count += 1
-            timer = self.elapsed(timer, "explaining.permutation.elapsed_time")
+            timer = self.elapsed(timer, "explaining.pfi.elapsed_time")
             print('Finished permutation importance in %.5f seconds' % (timer))
         else:
             print('Skipped permutation importance')

@@ -20,7 +20,7 @@ static const int ConfidenceMeter_attributes[] = {
 };
 
 static void ConfidenceMeter_updateValues(Meter* this) {
-   double confidence = (int)Platform_getConfidence() * 100.0;
+   double confidence = Platform_getConfidence();
    this->values[0] = confidence;
    if (confidence <= 0.0) {
       xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "(unknown)");

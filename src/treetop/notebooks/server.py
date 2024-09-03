@@ -35,10 +35,6 @@ from cmmv import ( MMV_SEM_INSTANT, MMV_SEM_DISCRETE, MMV_SEM_COUNTER,
                    MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_STRING,
                    MMV_FLAG_SENTINEL )
 
-# TODO: move inline? not alot of code in here
-import interpretability_module as interp
-from utils import local_diffi_batch
-
 permutation_importance = False # toggle, expensive to calculate though
 try:
     import shap
@@ -65,6 +61,72 @@ def metricspec(s):
     start = s.find('(')
     if start == -1: return s
     return s[:start] + '[' + s[start+1: -1] + ']'
+
+# DIFFI algorithm implementation does not exist as a module
+# Source code:  https://github.com/mattiacarletti/DIFFI.git
+#  -- Copyright (c) 2020 Mattia Carletti -- MIT License --
+
+def local_diffi(iforest, x):
+    # start time
+    start = time.time()
+    # initialization 
+    estimators = iforest.estimators_
+    cfi = np.zeros(len(x)).astype('float')
+    counter = np.zeros(len(x)).astype('int')
+    max_depth = int(np.ceil(np.log2(iforest.max_samples_)))
+    # for every iTree in the iForest
+    for estimator in estimators:
+        n_nodes = estimator.tree_.node_count
+        children_left = estimator.tree_.children_left
+        children_right = estimator.tree_.children_right
+        feature = estimator.tree_.feature
+        node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
+        is_leaves = np.zeros(shape=n_nodes, dtype=bool)
+        # compute node depths
+        stack = [(0, -1)]  
+        while len(stack) > 0:
+            node_id, parent_depth = stack.pop()
+            node_depth[node_id] = parent_depth + 1
+            # if test node
+            if (children_left[node_id] != children_right[node_id]):
+                stack.append((children_left[node_id], parent_depth + 1))
+                stack.append((children_right[node_id], parent_depth + 1))
+            else:
+                is_leaves[node_id] = True
+        # update cumulative importance and counter
+        x = x.reshape(1,-1)
+        node_indicator = estimator.decision_path(x)
+        node_indicator_array = node_indicator.toarray()
+        path = list(np.where(node_indicator_array == 1)[1])
+        leaf_depth = node_depth[path[-1]]
+        for node in path:
+            if not is_leaves[node]:
+                current_feature = feature[node] 
+                cfi[current_feature] += (1 / leaf_depth) - (1 / max_depth)
+                counter[current_feature] += 1
+    # compute FI
+    fi = np.zeros(len(cfi))
+    for i in range(len(cfi)):
+        if counter[i] != 0:
+            fi[i] = cfi[i] / counter[i]
+    end = time.time()
+    exec_time = end - start
+    return fi, exec_time
+
+def local_diffi_batch(iforest, X):
+    fi = []
+    ord_idx = []
+    exec_time = []
+    for i in range(X.shape[0]):
+        x_curr = X[i, :]
+        fi_curr, exec_time_curr = local_diffi(iforest, x_curr)
+        fi.append(fi_curr)
+        ord_idx_curr = np.argsort(fi_curr)[::-1]
+        ord_idx.append(ord_idx_curr)
+        exec_time.append(exec_time_curr)
+    fi = np.vstack(fi)
+    ord_idx = np.vstack(ord_idx)
+    return fi, ord_idx, exec_time 
 
 
 class TreetopServer():

@@ -460,6 +460,12 @@ class TreetopServer():
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for permutation-based optimisation explanation"),
+                   mmv.mmv_metric(name = "explaining.model.boosted_rounds",
+                              item = 41,
+                              typeof = MMV_TYPE_U32,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
+                              shorttext = "Number of XGBoost iterations of boosting"),
                   ]
 
         values = mmv.MemoryMappedValues("treetop.server",
@@ -912,33 +918,6 @@ class TreetopServer():
 
         return model, train_X, train_y, test_X, test_y
 
-    def optimise(self, model, train_X, train_y, test_X, test_y):
-        count = test_X.shape[1]
-        maxdf = test_X.loc[test_X.index.repeat(count)].reset_index(drop=True)
-        mindf = maxdf.copy()  # min/max contents the same before perturbation
-
-        # perturb one feature in each row
-        maxima = train_X.max().to_frame().T
-        minima = train_X.min().to_frame().T
-        for i, column in enumerate(test_X):
-            maxdf.at[i, column] = maxima[column][0]
-            mindf.at[i, column] = minima[column][0]
-
-        perturbed = pd.DataFrame({
-            'feature': test_X.columns.values,
-            'minimum': model.predict(maxdf),
-            'maximum': model.predict(mindf),
-        })
-
-        predict = model.predict(test_X)[0]
-        max_inc = perturbed[perturbed.maximum > predict]
-        max_dec = perturbed[perturbed.maximum < predict]
-        min_inc = perturbed[perturbed.minimum > predict]
-        min_dec = perturbed[perturbed.minimum < predict]
-
-        self.optimise_export(max_inc, max_dec, test_X, 'maximum', 'maxima')
-        self.optimise_export(min_inc, min_dec, test_X, 'minimum', 'minima')
-
     def optimise_export(self, df_inc, df_dec, test_X, column, name):
         v = self.values
         count = 0
@@ -975,6 +954,38 @@ class TreetopServer():
                 break
             count += 1
 
+    def optimise(self, model, train_X, train_y, test_X, test_y):
+        print('Calculating optimisation importance')
+        timer = time.time()
+
+        count = test_X.shape[1]
+        maxdf = test_X.loc[test_X.index.repeat(count)].reset_index(drop=True)
+        mindf = maxdf.copy()  # min/max contents the same before perturbation
+
+        # perturb one feature in each row
+        maxima = train_X.max().to_frame().T
+        minima = train_X.min().to_frame().T
+        for i, column in enumerate(test_X):
+            maxdf.at[i, column] = maxima[column][0]
+            mindf.at[i, column] = minima[column][0]
+
+        perturbed = pd.DataFrame({
+            'feature': test_X.columns.values,
+            'minimum': model.predict(maxdf),
+            'maximum': model.predict(mindf),
+        })
+        predict = model.predict(test_X)[0]
+        max_inc = perturbed[perturbed.maximum > predict]
+        max_dec = perturbed[perturbed.maximum < predict]
+        min_inc = perturbed[perturbed.minimum > predict]
+        min_dec = perturbed[perturbed.minimum < predict]
+
+        self.optimise_export(max_inc, max_dec, test_X, 'maximum', 'maxima')
+        self.optimise_export(min_inc, min_dec, test_X, 'minimum', 'minima')
+
+        timer = self.elapsed(timer, "optimising.elapsed_time")
+        print('Finished optimisation importance in %.5f seconds' % (timer))
+
     def confidence_level(self, model, target, test_X, test_y):
         """ Make prediction using latest values and compare to ground truth """
         goal = test_y.iloc[-1][target]
@@ -988,20 +999,15 @@ class TreetopServer():
         value = self.values.lookup_mapping("inferring.output.confidence", None)
         self.values.set(value, ratio * 100.0)
 
-    def explain_models(self, model, train_X, train_y, test_X, test_y):
-        # Generate feature importance measures and update metrics.
-        # Perform feature permutation assessment and update metrics.
-
-        # Firstly, calculate and export a confidence level for the model
-        self.confidence_level(model, self.target(), test_X, test_y)
-
-        booster = model.get_booster()   # non-scikit-learn XGBoost model
-        #print('Rounds', booster.num_boosted_rounds())
-
+    def model_importance(self, model):
+        """ Details: https://mljar.com/blog/feature-importance-xgboost/ """
         v = self.values
-        # https://mljar.com/blog/feature-importance-xgboost/
         value = v.lookup_mapping("explaining.model.importance_type", None)
         v.set_string(value, self._importance_type)
+
+        booster = model.get_booster()   # non-scikit-learn XGBoost model
+        value = v.lookup_mapping("explaining.model.boosted_rounds", None)
+        v.set(value, booster.num_boosted_rounds())
 
         # Importance from XGBoost model measures
         # supported importances: gain, total_gain, weight, cover, total_cover
@@ -1034,78 +1040,105 @@ class TreetopServer():
             v.set(value, self.NaN)
             i = i + 1
 
-        # Importance from optimisation measures
-        print('Calculating optimisation importance')
-        timer = time.time()
-        self.optimise(model, train_X, train_y, test_X, test_y)
-        timer = self.elapsed(timer, "optimising.elapsed_time")
-        print('Finished optimisation importance in %.5f seconds' % (timer))
-
-        if shap_explanations:
-            timer = time.time()
-            print('Calculating SHAP importance')
-            explainer = shap.TreeExplainer(model)
-            explanation = explainer.shap_values(test_X)
-            count = 0
-            for i in explanation.argsort()[0, ::-1]:
-                inst = str(count)
-                name = train_X.columns[i]  # feature name
-                shapv = explanation[0, i]  # SHAP value
-                if shapv == 0: shapv = self.NaN
-                value = v.lookup_mapping("explaining.shap.features", inst)
-                v.set_string(value, metricspec(name))
-                value = v.lookup_mapping("explaining.shap.value", inst)
-                v.set(value, shapv)
-                value = v.lookup_mapping("explaining.shap.mutual_information", inst)
-                v.set(value, self.mutualinfo[name].item())
-                if count >= self._max_features:
-                    break
-                count += 1
-            timer = self.elapsed(timer, "explaining.shap.elapsed_time")
-            print('Finished SHAP importance in %.5f seconds [%d]' % (timer, i+1))
-            while i < self._max_features:  # clear any remaining instances
-                inst = str(i + 1)
-                value = v.lookup_mapping("explaining.shap.features", inst)
-                v.set_string(value, '')
-                value = v.lookup_mapping("explaining.shap.value", inst)
-                v.set(value, self.NaN)
-                value = v.lookup_mapping("explaining.shap.mutual_information", inst)
-                v.set(value, self.NaN)
-                i = i + 1
-        else:
+    def shap_importance(self, model, train_X, test_X):
+        if not shap_explanations:
             print('Skipping SHAP importance')
+            return
+        print('Calculating SHAP importance')
+        v = self.values
+        timer = time.time()
+        explainer = shap.TreeExplainer(model)
+        explanation = explainer.shap_values(test_X)
+        count = 0
+        for i in explanation.argsort()[0, ::-1]:
+            inst = str(count)
+            name = train_X.columns[i]  # feature name
+            shapv = explanation[0, i]  # SHAP value
+            if shapv == 0: shapv = self.NaN
+            value = v.lookup_mapping("explaining.shap.features", inst)
+            v.set_string(value, metricspec(name))
+            value = v.lookup_mapping("explaining.shap.value", inst)
+            v.set(value, shapv)
+            value = v.lookup_mapping("explaining.shap.mutual_information", inst)
+            v.set(value, self.mutualinfo[name].item())
+            if count >= self._max_features:
+                break
+            count += 1
+        timer = self.elapsed(timer, "explaining.shap.elapsed_time")
+        print('Finished SHAP importance in %.5f seconds [%d]' % (timer, i+1))
+        while i < self._max_features:  # clear any remaining instances
+            inst = str(i + 1)
+            value = v.lookup_mapping("explaining.shap.features", inst)
+            v.set_string(value, '')
+            value = v.lookup_mapping("explaining.shap.value", inst)
+            v.set(value, self.NaN)
+            value = v.lookup_mapping("explaining.shap.mutual_information", inst)
+            v.set(value, self.NaN)
+            i = i + 1
 
-        if permutation_importance:
-            timer = time.time()
-            print('Calculating permutation importance')
-            # Importance from permutation information measure
-            pfi = permutation_importance(model, train_X, train_y, n_repeats=3,
-                                         max_samples=0.5, n_jobs=-1)
-            count = 0
-            for i in pfi.importances_mean.argsort()[::-1]:
-                if pfi.importances_mean[i] - 2 * pfi.importances_std[i] <= 0:
-                    continue
-                inst = str(count)
-                name = train_X.columns[i]
-                pfi_mean = pfi.importances_mean[i]
-                if pfi_mean == 0: pfi_mean = self.NaN
-                pfi_std = pfi.importances_std[i]
-                if pfi_std == 0: pfi_std = self.NaN
-                value = v.lookup_mapping("explaining.pfi.features", inst)
-                v.set_string(value, metricspec(name))
-                value = v.lookup_mapping("explaining.pfi.mean", inst)
-                v.set(value, pfi_mean)
-                value = v.lookup_mapping("explaining.pfi.std", inst)
-                v.set(value, pfi_std)
-                value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
-                v.set(value, self.mutualinfo[name].item())
-                if count >= self._max_features:
-                    break
-                count += 1
-            timer = self.elapsed(timer, "explaining.pfi.elapsed_time")
-            print('Finished permutation importance in %.5f seconds' % (timer))
-        else:
+    def permutation_feature_importance(self, model, train_X, train_y):
+        if not permutation_importance:
             print('Skipped permutation importance')
+            return
+        v = self.values
+        timer = time.time()
+        print('Calculating permutation importance')
+        # Importance from permutation information measure
+        pfi = permutation_importance(model, train_X, train_y, n_repeats=3,
+                                     max_samples=0.5, n_jobs=-1)
+        count = 0
+        for i in pfi.importances_mean.argsort()[::-1]:
+            if pfi.importances_mean[i] - 2 * pfi.importances_std[i] <= 0:
+                continue
+            inst = str(count)
+            name = train_X.columns[i]
+            pfi_mean = pfi.importances_mean[i]
+            if pfi_mean == 0: pfi_mean = self.NaN
+            pfi_std = pfi.importances_std[i]
+            if pfi_std == 0: pfi_std = self.NaN
+            value = v.lookup_mapping("explaining.pfi.features", inst)
+            v.set_string(value, metricspec(name))
+            value = v.lookup_mapping("explaining.pfi.mean", inst)
+            v.set(value, pfi_mean)
+            value = v.lookup_mapping("explaining.pfi.std", inst)
+            v.set(value, pfi_std)
+            value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
+            v.set(value, self.mutualinfo[name].item())
+            if count >= self._max_features:
+                break
+            count += 1
+        timer = self.elapsed(timer, "explaining.pfi.elapsed_time")
+        print('Finished permutation importance in %.5f seconds' % (timer))
+        while i < self._max_features:  # clear any remaining instances
+            inst = str(i + 1)
+            value = v.lookup_mapping("explaining.pfi.features", inst)
+            v.set_string(value, '')
+            value = v.lookup_mapping("explaining.pfi.mean", inst)
+            v.set(value, self.NaN)
+            value = v.lookup_mapping("explaining.pfi.std", inst)
+            v.set(value, self.NaN)
+            value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
+            v.set(value, self.NaN)
+            i = i + 1
+
+    def explain_models(self, model, train_X, train_y, test_X, test_y):
+        """ Generate feature importance measures and update metrics. """
+        """ Perform feature permutation assessment and update metrics. """
+
+        # Firstly, calculate and export a confidence level for the model
+        self.confidence_level(model, self.target(), test_X, test_y)
+
+        # Model feature importance measures
+        self.model_importance(model)
+
+        # Importance from optimisation measures
+        self.optimise(model, train_X, train_y, test_X, test_y)
+
+        # Importance from SHAP values
+        self.shap_importance(model, train_X, test_X)
+
+        # Permutation Feature Importance measure
+        self.permutation_feature_importance(model, train_X, train_y)
 
 if __name__ == '__main__':
 

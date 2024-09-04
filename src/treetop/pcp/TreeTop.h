@@ -84,7 +84,7 @@ char* Platform_getTargetMetric(void);
 
 char* Platform_getTargetTimestamp(void);
 
-char* Platform_getTargetValueset(void);
+double* Platform_getTargetValueset(size_t* count, double* maximum);
 
 int Platform_getTotalFeatures(void);
 

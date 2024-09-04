@@ -210,8 +210,12 @@ class TreetopServer():
             class.  Sampled by the treetop-client process for the
             servers results for training, predicting & explaining.
         """
-        model_features, permutation_features, shap_features = [], [], []
+        model_features, sample_valueset = [], []
+        permutation_features, shap_features = [], []
         optmin_features, optmax_features = [], []
+        for instid in range(self._sample_valueset):
+            instance = str(instid)
+            sample_valueset.append(mmv.mmv_instance(instid, instance))
         for feature in range(self._max_features):
             instance = str(feature)
             model_features.append(mmv.mmv_instance(feature, instance))
@@ -234,12 +238,15 @@ class TreetopServer():
                   mmv.mmv_indom(serial = 5,
                     shorttext = "Minima-perturbed optimisation feature importance",
                     helptext = "Set of important optimisation features found by minima perturbation"),
+                  mmv.mmv_indom(serial = 6,
+                    shorttext = "Target metric recent sampled values"),
                  ]
         indoms[0].set_instances(model_features)
         indoms[1].set_instances(permutation_features)
         indoms[2].set_instances(shap_features)
         indoms[3].set_instances(optmax_features)
         indoms[4].set_instances(optmin_features)
+        indoms[5].set_instances(sample_valueset)
 
         metrics = [mmv.mmv_metric(name = "target.metric",
                               item = 1,
@@ -258,9 +265,10 @@ class TreetopServer():
                                   "time for inference and explanations."),
                    mmv.mmv_metric(name = "target.valueset",
                               item = 3,
-                              typeof = MMV_TYPE_STRING,
+                              typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
+                              indom = 6,
                               shorttext = "Target values preceding timestamp",
                               helptext = "Comma-separated values for target "
                                   "up to and including the current sample."),
@@ -741,14 +749,17 @@ class TreetopServer():
     def export_values(self, target, window):
         """ export dataset metrics, including the valueset metric """
         """ (used in the treetop recent-values lag graph display) """
-        values = window[target].tolist()[-self._sample_valueset:]
-        valueset = ','.join(map("{:.2f}".format, values))
-        if len(valueset) > 255: # hard limit of mapped string size
-            truncate = valueset[0:255].rfind(',')
-            valueset = valueset[0:truncate]
+        valueset = window[target].tolist()[-self._sample_valueset:]
         values = self.values
-        value = values.lookup_mapping("target.valueset", None)
-        values.set_string(value, valueset)
+        count = 0
+        while count < self._sample_valueset or count < len(valueset):
+            inst = str(count)
+            value = values.lookup_mapping("target.valueset", inst)
+            if count < len(valueset):
+                values.set(value, valueset[count])
+            else:
+                values.set(value, self.NaN)
+            count = count + 1
         value = values.lookup_mapping("features.total", None)
         values.set(value, window.shape[1])
         value = values.lookup_mapping("features.missing_values", None)

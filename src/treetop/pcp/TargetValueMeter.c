@@ -26,56 +26,27 @@ static const char* const TargetValueMeter_captions[] = {
    "Lag",
 };
 
-static double* parseValueset(char* valueset, size_t* nValues, double* maximum) {
-   size_t nv = 0;
-   const int MAX_VALUESET = 64;
-   double* result = calloc(MAX_VALUESET, sizeof(double));
-   double largest = 0.0;
-   char* tmp = valueset;
-   char* token;
-
-   if (!result) {
-      *maximum = 1.0;
-      *nValues = 0;
-      return NULL;
-   }
-   while ((token = strsep(&tmp, ","))) {
-      if ((result[nv] = strtod(token, NULL)) > largest)
-         largest = result[nv];
-      if (++nv >= MAX_VALUESET)
-         break;
-   }
-   *maximum = largest > 0.0 ? largest : 1.0;
-   *nValues = nv;
-   return result;
-}
-
 static void TargetValueMeter_updateValues(Meter* this) {
-   char* valueset = Platform_getTargetValueset();
    const Machine* host = this->host;
-   double maximum;
-   double* values;
+   double* values, maximum;
    size_t nValues;
 
-   // split into comma-separated list and convert to double
-   values = parseValueset(valueset, &nValues, &maximum);
-   for (size_t i = 0; i < nValues; i++)
-      valueset[i] /= maximum * 100.0;
+   values = Platform_getTargetValueset(&nValues, &maximum);
 
    // prepare value array for GraphMeterMode_draw rendering
    GraphData* data = &this->drawData;
    free(data->values);
    data->values = values;
    data->nValues = nValues;
-   data->time = host->realtime; // prevents subsequent values/nValues updates
+   data->time = host->realtime;
+   data->time.tv_sec++; // workaround, skip logic in GraphMeterMode_draw
 
+   this->total = maximum;
    this->curItems = 1;
-   this->values[0] = 0; // most recent
+   this->values[0] = values[0];
    if (this->mode == GRAPH_METERMODE) {
-      this->total = 100.0;
       this->caption = TargetValueMeter_captions[1];
    } else {
-      this->total = maximum;
       this->caption = TargetValueMeter_captions[0];
    }
 

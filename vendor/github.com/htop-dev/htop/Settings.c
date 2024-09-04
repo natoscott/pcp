@@ -252,7 +252,6 @@ static int toFieldIndex(Hashtable* columns, const char* str) {
             unsigned int key;
             *end = '\0';
             success = DynamicColumn_search(columns, dynamic, &key) != NULL;
-fprintf(stderr, "DynamicColumn_search: %s is %s\n", dynamic, success? "t":"f");
             *end = ')';
             if (success)
                return key;

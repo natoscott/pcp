@@ -362,14 +362,12 @@ bool Platform_init(void) {
    }
 
    /* extract values needed for setup - e.g. cpu count, pid_max */
-   Metric_enable(PCP_PID_MAX, true);
-   Metric_enable(PCP_BOOTTIME, true);
-   Metric_enable(PCP_HINV_NCPU, true);
-   Metric_enable(PCP_PERCPU_SYSTEM, true);
-   Metric_enable(PCP_UNAME_SYSNAME, true);
-   Metric_enable(PCP_UNAME_RELEASE, true);
-   Metric_enable(PCP_UNAME_MACHINE, true);
-   Metric_enable(PCP_UNAME_DISTRO, true);
+   Metric_enable(PCP_TARGET_METRIC, true);
+   Metric_enable(PCP_TARGET_TIMESTAMP, true);
+   Metric_enable(PCP_TARGET_VALUESET, true);
+   Metric_enable(PCP_SAMPLING_COUNT, true);
+   Metric_enable(PCP_SAMPLING_INTERVAL, true);
+   Metric_enable(PCP_MODEL_CONFIDENCE, true);
 
    /* enable metrics for all dynamic columns (including those from dynamic screens) */
    for (size_t i = pcp->columns.offset; i < pcp->columns.offset + pcp->columns.count; i++)
@@ -377,18 +375,7 @@ bool Platform_init(void) {
 
    Metric_fetch(NULL);
 
-   for (Metric metric = 0; metric < PCP_PROC_PID; metric++)
-      Metric_enable(metric, true);
-   Metric_enable(PCP_PID_MAX, false); /* needed one time only */
-   Metric_enable(PCP_BOOTTIME, false);
-   Metric_enable(PCP_UNAME_SYSNAME, false);
-   Metric_enable(PCP_UNAME_RELEASE, false);
-   Metric_enable(PCP_UNAME_MACHINE, false);
-   Metric_enable(PCP_UNAME_DISTRO, false);
-
    /* first sample (fetch) performed above, save constants */
-   Platform_getBootTime();
-   Platform_getRelease(0);
    Platform_getMaxCPU();
    Platform_getMaxPid();
 
@@ -529,11 +516,27 @@ char* Platform_getTargetTimestamp(void) {
    return value.cp;
 }
 
-char* Platform_getTargetValueset(void) {
-   pmAtomValue value;
-   if (Metric_values(PCP_TARGET_VALUESET, &value, 1, PM_TYPE_STRING) == NULL)
+double* Platform_getTargetValueset(size_t *count, double* maximum) {
+   pmAtomValue value[MAX_METER_GRAPHDATA_VALUES];
+   double* values, largest = 0.0;
+
+   *count = 0;
+   *maximum = 0.0;
+
+   if (Metric_values(PCP_TARGET_VALUESET, &value[0], MAX_METER_GRAPHDATA_VALUES, PM_TYPE_DOUBLE) == NULL)
       return NULL;
-   return value.cp;
+
+   size_t instances = Metric_instanceCount(PCP_TARGET_VALUESET);
+   if ((values = calloc(instances, sizeof(double))) == NULL)
+      return NULL;
+
+   for (size_t i = 0; i < instances; i++) {
+      largest = MAXIMUM(largest, value[i].d);
+      values[i] = value[i].d;
+   }
+   *maximum = largest;
+   *count = instances;
+   return values;
 }
 
 int Platform_getUptime(void) {

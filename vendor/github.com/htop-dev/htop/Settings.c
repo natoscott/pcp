@@ -148,7 +148,7 @@ static void Settings_defaultMeters(Settings* this, Machine* host) {
    this->hColumns[0].names[3] = xStrdup("TargetValue");
    this->hColumns[0].modes[3] = GRAPH_METERMODE;
    this->hColumns[1].names[0] = xStrdup("ElapsedTime");
-   this->hColumns[1].modes[0] = BAR_METERMODE;
+   this->hColumns[1].modes[0] = TEXT_METERMODE;
    this->hColumns[1].names[1] = xStrdup("WindowSize");
    this->hColumns[1].modes[1] = TEXT_METERMODE;
    this->hColumns[1].names[2] = xStrdup("Features");

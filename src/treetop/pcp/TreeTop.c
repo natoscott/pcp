@@ -47,18 +47,18 @@ in the source distribution for its full text.
 #include "pcp/PCPDynamicMeter.h"
 #include "pcp/PCPDynamicScreen.h"
 #include "pcp/PCPMachine.h"
-#include "pcp/PCPProcessTable.h"
+#include "pcp/TreeTopProcessTable.h"
 
 
 Platform* pcp;
 
 const ScreenDefaults Platform_defaultScreens[] = {
-//  { .name = "Model feature importance",
-//    .columns = "Dynamic(features) Dynamic(importance) Dynamic(mutualinfo)",
-//  },
+  { .name = "Model feature importance",
+    .columns = "FEATURE IMPORTANCE MUTUALINFO",
+  },
 };
 
-const unsigned int Platform_numberOfDefaultScreens; // = ARRAYSIZE(Platform_defaultScreens);
+const unsigned int Platform_numberOfDefaultScreens = ARRAYSIZE(Platform_defaultScreens);
 
 const SignalItem Platform_signals[] = {
    { .name = " 0 Cancel",    .number = 0 },
@@ -89,120 +89,6 @@ const MeterClass* const Platform_meterTypes[] = {
 
 static const char* Platform_metricNames[] = {
    [PCP_CONTROL_THREADS] = "proc.control.perclient.threads",
-
-   [PCP_HINV_NCPU] = "hinv.ncpu",
-   [PCP_HINV_CPUCLOCK] = "hinv.cpu.clock",
-   [PCP_UNAME_SYSNAME] = "kernel.uname.sysname",
-   [PCP_UNAME_RELEASE] = "kernel.uname.release",
-   [PCP_UNAME_MACHINE] = "kernel.uname.machine",
-   [PCP_UNAME_DISTRO] = "kernel.uname.distro",
-   [PCP_LOAD_AVERAGE] = "kernel.all.load",
-   [PCP_PID_MAX] = "kernel.all.pid_max",
-   [PCP_UPTIME] = "kernel.all.uptime",
-   [PCP_BOOTTIME] = "kernel.all.boottime",
-   [PCP_CPU_USER] = "kernel.all.cpu.user",
-   [PCP_CPU_NICE] = "kernel.all.cpu.nice",
-   [PCP_CPU_SYSTEM] = "kernel.all.cpu.sys",
-   [PCP_CPU_IDLE] = "kernel.all.cpu.idle",
-   [PCP_CPU_IOWAIT] = "kernel.all.cpu.wait.total",
-   [PCP_CPU_IRQ] = "kernel.all.cpu.intr",
-   [PCP_CPU_SOFTIRQ] = "kernel.all.cpu.irq.soft",
-   [PCP_CPU_STEAL] = "kernel.all.cpu.steal",
-   [PCP_CPU_GUEST] = "kernel.all.cpu.guest",
-   [PCP_CPU_GUESTNICE] = "kernel.all.cpu.guest_nice",
-   [PCP_PERCPU_USER] = "kernel.percpu.cpu.user",
-   [PCP_PERCPU_NICE] = "kernel.percpu.cpu.nice",
-   [PCP_PERCPU_SYSTEM] = "kernel.percpu.cpu.sys",
-   [PCP_PERCPU_IDLE] = "kernel.percpu.cpu.idle",
-   [PCP_PERCPU_IOWAIT] = "kernel.percpu.cpu.wait.total",
-   [PCP_PERCPU_IRQ] = "kernel.percpu.cpu.intr",
-   [PCP_PERCPU_SOFTIRQ] = "kernel.percpu.cpu.irq.soft",
-   [PCP_PERCPU_STEAL] = "kernel.percpu.cpu.steal",
-   [PCP_PERCPU_GUEST] = "kernel.percpu.cpu.guest",
-   [PCP_PERCPU_GUESTNICE] = "kernel.percpu.cpu.guest_nice",
-   [PCP_MEM_TOTAL] = "mem.physmem",
-   [PCP_MEM_FREE] = "mem.util.free",
-   [PCP_MEM_AVAILABLE] = "mem.util.available",
-   [PCP_MEM_BUFFERS] = "mem.util.bufmem",
-   [PCP_MEM_CACHED] = "mem.util.cached",
-   [PCP_MEM_SHARED] = "mem.util.shmem",
-   [PCP_MEM_SRECLAIM] = "mem.util.slabReclaimable",
-   [PCP_MEM_SWAPCACHED] = "mem.util.swapCached",
-   [PCP_MEM_SWAPTOTAL] = "mem.util.swapTotal",
-   [PCP_MEM_SWAPFREE] = "mem.util.swapFree",
-   [PCP_DISK_READB] = "disk.all.read_bytes",
-   [PCP_DISK_WRITEB] = "disk.all.write_bytes",
-   [PCP_DISK_ACTIVE] = "disk.all.avactive",
-   [PCP_NET_RECVB] = "network.all.in.bytes",
-   [PCP_NET_SENDB] = "network.all.out.bytes",
-   [PCP_NET_RECVP] = "network.all.in.packets",
-   [PCP_NET_SENDP] = "network.all.out.packets",
-
-   [PCP_PSI_CPUSOME] = "kernel.all.pressure.cpu.some.avg",
-   [PCP_PSI_IOSOME] = "kernel.all.pressure.io.some.avg",
-   [PCP_PSI_IOFULL] = "kernel.all.pressure.io.full.avg",
-   [PCP_PSI_IRQFULL] = "kernel.all.pressure.irq.full.avg",
-   [PCP_PSI_MEMSOME] = "kernel.all.pressure.memory.some.avg",
-   [PCP_PSI_MEMFULL] = "kernel.all.pressure.memory.full.avg",
-
-   [PCP_MEM_ZSWAP] = "mem.util.zswap",
-   [PCP_MEM_ZSWAPPED] = "mem.util.zswapped",
-   [PCP_VFS_FILES_COUNT] = "vfs.files.count",
-   [PCP_VFS_FILES_MAX] = "vfs.files.max",
-
-   [PCP_PROC_PID] = "proc.psinfo.pid",
-   [PCP_PROC_PPID] = "proc.psinfo.ppid",
-   [PCP_PROC_TGID] = "proc.psinfo.tgid",
-   [PCP_PROC_PGRP] = "proc.psinfo.pgrp",
-   [PCP_PROC_SESSION] = "proc.psinfo.session",
-   [PCP_PROC_STATE] = "proc.psinfo.sname",
-   [PCP_PROC_TTY] = "proc.psinfo.tty",
-   [PCP_PROC_TTYPGRP] = "proc.psinfo.tty_pgrp",
-   [PCP_PROC_MINFLT] = "proc.psinfo.minflt",
-   [PCP_PROC_MAJFLT] = "proc.psinfo.maj_flt",
-   [PCP_PROC_CMINFLT] = "proc.psinfo.cmin_flt",
-   [PCP_PROC_CMAJFLT] = "proc.psinfo.cmaj_flt",
-   [PCP_PROC_UTIME] = "proc.psinfo.utime",
-   [PCP_PROC_STIME] = "proc.psinfo.stime",
-   [PCP_PROC_CUTIME] = "proc.psinfo.cutime",
-   [PCP_PROC_CSTIME] = "proc.psinfo.cstime",
-   [PCP_PROC_PRIORITY] = "proc.psinfo.priority",
-   [PCP_PROC_NICE] = "proc.psinfo.nice",
-   [PCP_PROC_THREADS] = "proc.psinfo.threads",
-   [PCP_PROC_STARTTIME] = "proc.psinfo.start_time",
-   [PCP_PROC_PROCESSOR] = "proc.psinfo.processor",
-   [PCP_PROC_CMD] = "proc.psinfo.cmd",
-   [PCP_PROC_PSARGS] = "proc.psinfo.psargs",
-   [PCP_PROC_CGROUPS] = "proc.psinfo.cgroups",
-   [PCP_PROC_OOMSCORE] = "proc.psinfo.oom_score",
-   [PCP_PROC_VCTXSW] = "proc.psinfo.vctxsw",
-   [PCP_PROC_NVCTXSW] = "proc.psinfo.nvctxsw",
-   [PCP_PROC_LABELS] = "proc.psinfo.labels",
-   [PCP_PROC_ENVIRON] = "proc.psinfo.environ",
-   [PCP_PROC_TTYNAME] = "proc.psinfo.ttyname",
-   [PCP_PROC_EXE] = "proc.psinfo.exe",
-   [PCP_PROC_CWD] = "proc.psinfo.cwd",
-   [PCP_PROC_AUTOGROUP_ID] = "proc.autogroup.id",
-   [PCP_PROC_AUTOGROUP_NICE] = "proc.autogroup.nice",
-   [PCP_PROC_ID_UID] = "proc.id.uid",
-   [PCP_PROC_ID_USER] = "proc.id.uid_nm",
-   [PCP_PROC_IO_RCHAR] = "proc.io.rchar",
-   [PCP_PROC_IO_WCHAR] = "proc.io.wchar",
-   [PCP_PROC_IO_SYSCR] = "proc.io.syscr",
-   [PCP_PROC_IO_SYSCW] = "proc.io.syscw",
-   [PCP_PROC_IO_READB] = "proc.io.read_bytes",
-   [PCP_PROC_IO_WRITEB] = "proc.io.write_bytes",
-   [PCP_PROC_IO_CANCELLED] = "proc.io.cancelled_write_bytes",
-   [PCP_PROC_MEM_SIZE] = "proc.memory.size",
-   [PCP_PROC_MEM_RSS] = "proc.memory.rss",
-   [PCP_PROC_MEM_SHARE] = "proc.memory.share",
-   [PCP_PROC_MEM_TEXTRS] = "proc.memory.textrss",
-   [PCP_PROC_MEM_LIBRS] = "proc.memory.librss",
-   [PCP_PROC_MEM_DATRS] = "proc.memory.datrss",
-   [PCP_PROC_MEM_DIRTY] = "proc.memory.dirty",
-   [PCP_PROC_SMAPS_PSS] = "proc.smaps.pss",
-   [PCP_PROC_SMAPS_SWAP] = "proc.smaps.swap",
-   [PCP_PROC_SMAPS_SWAPPSS] = "proc.smaps.swappss",
 
    [PCP_TARGET_METRIC] = "mmv.treetop.server.target.metric",
    [PCP_TARGET_TIMESTAMP] = "mmv.treetop.server.target.timestamp",
@@ -540,93 +426,24 @@ double* Platform_getTargetValueset(size_t *count, double* maximum) {
 }
 
 int Platform_getUptime(void) {
-   pmAtomValue value;
-   if (Metric_values(PCP_UPTIME, &value, 1, PM_TYPE_32) == NULL)
-      return 0;
-   return value.l;
+   return 0;
 }
 
 unsigned int Platform_getMaxCPU(void) {
-   if (pcp->ncpu)
-      return pcp->ncpu;
-
-   pmAtomValue value;
-   if (Metric_values(PCP_HINV_NCPU, &value, 1, PM_TYPE_U32) != NULL)
-      pcp->ncpu = value.ul;
-   else
-      pcp->ncpu = 1;
-   return pcp->ncpu;
+   1;
 }
 
 pid_t Platform_getMaxPid(void) {
-   if (pcp->pidmax)
-      return pcp->pidmax;
-
-   pmAtomValue value;
-   if (Metric_values(PCP_PID_MAX, &value, 1, PM_TYPE_32) == NULL)
-      return INT_MAX;
-   pcp->pidmax = value.l;
-   return pcp->pidmax;
+   return INT_MAX;
 }
 
 long long Platform_getBootTime(void) {
-   if (pcp->btime)
-      return pcp->btime;
-
-   pmAtomValue value;
-   if (Metric_values(PCP_BOOTTIME, &value, 1, PM_TYPE_64) != NULL)
-      pcp->btime = value.ll;
-   return pcp->btime;
-}
-
-static double Platform_setOneCPUValues(Meter* this, const Settings* settings, pmAtomValue* values) {
-   unsigned long long value = values[CPU_TOTAL_PERIOD].ull;
-   double total = (double) (value == 0 ? 1 : value);
-   double percent;
-
-   double* v = this->values;
-   v[CPU_METER_NICE] = values[CPU_NICE_PERIOD].ull / total * 100.0;
-   v[CPU_METER_NORMAL] = values[CPU_USER_PERIOD].ull / total * 100.0;
-   if (settings->detailedCPUTime) {
-      v[CPU_METER_KERNEL]  = values[CPU_SYSTEM_PERIOD].ull / total * 100.0;
-      v[CPU_METER_IRQ]     = values[CPU_IRQ_PERIOD].ull / total * 100.0;
-      v[CPU_METER_SOFTIRQ] = values[CPU_SOFTIRQ_PERIOD].ull / total * 100.0;
-      this->curItems = 5;
-
-      v[CPU_METER_STEAL]   = values[CPU_STEAL_PERIOD].ull / total * 100.0;
-      v[CPU_METER_GUEST]   = values[CPU_GUEST_PERIOD].ull / total * 100.0;
-      if (settings->accountGuestInCPUMeter) {
-         this->curItems = 7;
-      }
-
-      v[CPU_METER_IOWAIT]  = values[CPU_IOWAIT_PERIOD].ull / total * 100.0;
-   } else {
-      v[CPU_METER_KERNEL] = values[CPU_SYSTEM_ALL_PERIOD].ull / total * 100.0;
-      value = values[CPU_STEAL_PERIOD].ull + values[CPU_GUEST_PERIOD].ull;
-      v[CPU_METER_IRQ] = value / total * 100.0;
-      this->curItems = 4;
-   }
-
-   percent = sumPositiveValues(v, this->curItems);
-   percent = MINIMUM(percent, 100.0);
-
-   if (settings->detailedCPUTime) {
-      this->curItems = 8;
-   }
-
-   v[CPU_METER_FREQUENCY] = values[CPU_FREQUENCY].d;
-   v[CPU_METER_TEMPERATURE] = NAN;
-
-   return percent;
+   return 0;
 }
 
 double Platform_setCPUValues(Meter* this, int cpu) {
-   const PCPMachine* phost = (const PCPMachine*) this->host;
-   const Settings* settings = this->host->settings;
-
-   if (cpu <= 0) /* use aggregate values */
-      return Platform_setOneCPUValues(this, settings, phost->cpu);
-   return Platform_setOneCPUValues(this, settings, phost->percpu[cpu - 1]);
+   (void)this; (void)cpu;
+   return 0;
 }
 
 void Platform_getHostname(char* buffer, size_t size) {
@@ -635,71 +452,12 @@ void Platform_getHostname(char* buffer, size_t size) {
 }
 
 void Platform_getRelease(char** string) {
-   /* fast-path - previously-formatted string */
-   if (string) {
-      *string = pcp->release;
-      return;
-   }
-
-   /* first call, extract just-sampled values */
-   pmAtomValue sysname, release, machine, distro;
-   if (!Metric_values(PCP_UNAME_SYSNAME, &sysname, 1, PM_TYPE_STRING))
-      sysname.cp = NULL;
-   if (!Metric_values(PCP_UNAME_RELEASE, &release, 1, PM_TYPE_STRING))
-      release.cp = NULL;
-   if (!Metric_values(PCP_UNAME_MACHINE, &machine, 1, PM_TYPE_STRING))
-      machine.cp = NULL;
-   if (!Metric_values(PCP_UNAME_DISTRO, &distro, 1, PM_TYPE_STRING))
-      distro.cp = NULL;
-
-   size_t length = 16; /* padded for formatting characters */
-   if (sysname.cp)
-      length += strlen(sysname.cp);
-   if (release.cp)
-      length += strlen(release.cp);
-   if (machine.cp)
-      length += strlen(machine.cp);
-   if (distro.cp)
-      length += strlen(distro.cp);
-   pcp->release = xCalloc(1, length);
-
-   if (sysname.cp) {
-      strcat(pcp->release, sysname.cp);
-      strcat(pcp->release, " ");
-   }
-   if (release.cp) {
-      strcat(pcp->release, release.cp);
-      strcat(pcp->release, " ");
-   }
-   if (machine.cp) {
-      strcat(pcp->release, "[");
-      strcat(pcp->release, machine.cp);
-      strcat(pcp->release, "] ");
-   }
-   if (distro.cp) {
-      if (pcp->release[0] != '\0') {
-         strcat(pcp->release, "@ ");
-         strcat(pcp->release, distro.cp);
-      } else {
-         strcat(pcp->release, distro.cp);
-      }
-      strcat(pcp->release, " ");
-   }
-
-   if (pcp->release) /* cull trailing space */
-      pcp->release[strlen(pcp->release)] = '\0';
-
-   free(distro.cp);
-   free(machine.cp);
-   free(release.cp);
-   free(sysname.cp);
+   *string = NULL;
 }
 
 char* Platform_getProcessEnv(pid_t pid) {
-   pmAtomValue value;
-   if (!Metric_instance(PCP_PROC_ENVIRON, pid, 0, &value, PM_TYPE_STRING))
-      return NULL;
-   return value.cp;
+   (void)pid;
+   return NULL;
 }
 
 FileLocks_ProcessData* Platform_getProcessLocks(pid_t pid) {

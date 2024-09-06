@@ -55,5 +55,5 @@ const MeterClass ConfidenceMeter_class = {
    .attributes = ConfidenceMeter_attributes,
    .name = "Confidence",
    .uiName = "Confidence",
-   .caption = "Acc"
+   .caption = "Accuracy: "
 };

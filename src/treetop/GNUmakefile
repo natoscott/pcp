@@ -90,8 +90,6 @@ SUBCFILES = \
 	pcp/PCPDynamicColumn.c \
 	pcp/PCPDynamicMeter.c \
 	pcp/PCPDynamicScreen.c \
-	pcp/PCPProcess.c \
-	pcp/PCPProcessTable.c \
 
 TOPHFILES = \
 	Action.h \
@@ -161,9 +159,6 @@ SUBHFILES = \
 	pcp/PCPDynamicColumn.h \
 	pcp/PCPDynamicMeter.h \
 	pcp/PCPDynamicScreen.h \
-	pcp/PCPProcess.h \
-	pcp/PCPProcessTable.h \
-	pcp/ProcessField.h \
 
 TREETOPCFILES = \
 	treetop.c \
@@ -179,6 +174,8 @@ TREETOPCFILES = \
 	pcp/TargetValueMeter.c \
 	pcp/TrainingTimeMeter.c \
 	pcp/TrainingWindowMeter.c \
+	pcp/TreeTopProcess.c \
+	pcp/TreeTopProcessTable.c \
 
 TREETOPHFILES = \
 	pcp/Metric.h \
@@ -194,6 +191,8 @@ TREETOPHFILES = \
 	pcp/TargetValueMeter.h \
 	pcp/TrainingTimeMeter.h \
 	pcp/TrainingWindowMeter.h \
+	pcp/TreeTopProcess.h \
+	pcp/TreeTopProcessTable.h \
 
 DOCFILES = AUTHORS
 

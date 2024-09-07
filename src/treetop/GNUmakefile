@@ -19,7 +19,7 @@ COPYRIGHT = "(C) 2004-2019 Hisham Muhammad. (C) 2020-2024 htop dev team."
 
 CMDTARGET = treetop
 DISTARGET = $(PCP_BINADM_DIR)/$(CMDTARGET)
-LLDLIBS = $(PCPLIB) $(LIB_FOR_NCURSESW) $(LIB_FOR_MATH) $(LIB_FOR_BACKTRACE)
+LLDLIBS = $(PCP_MMVLIB) $(LIB_FOR_NCURSESW) $(LIB_FOR_MATH) $(LIB_FOR_BACKTRACE)
 NCURSES_CFLAGS = -DHAVE_LIBNCURSESW=$(HAVE_NCURSESW)
 LCFLAGS = $(NCURSES_CFLAGS) $(C99_CFLAGS) -Ipcp -I. -DBUILD_TREETOP=1
 LCFLAGS += -DNDEBUG -DVERSION=\"$(PCP_VERSION)\" -DPACKAGE_NAME=\"treetop\"
@@ -77,7 +77,6 @@ TOPCFILES = \
 	SysArchMeter.c \
 	Table.c \
 	TraceScreen.c \
-	UptimeMeter.c \
 	UsersTable.c \
 	Vector.c \
 	XUtils.c \
@@ -86,7 +85,6 @@ SUBCFILES = \
 	linux/CGroupUtils.c \
 	pcp/InDomTable.c \
 	pcp/Instance.c \
-	pcp/Metric.c \
 	pcp/PCPDynamicColumn.c \
 	pcp/PCPDynamicMeter.c \
 	pcp/PCPDynamicScreen.c \
@@ -147,7 +145,6 @@ TOPHFILES = \
 	SysArchMeter.h \
 	Table.h \
 	TraceScreen.h \
-	UptimeMeter.h \
 	UsersTable.h \
 	Vector.h \
 	XUtils.h \
@@ -162,6 +159,7 @@ SUBHFILES = \
 
 TREETOPCFILES = \
 	treetop.c \
+	pcp/Metric.c \
 	pcp/TreeTop.c \
 	pcp/PCPMachine.c \
 	pcp/ConfidenceMeter.c \

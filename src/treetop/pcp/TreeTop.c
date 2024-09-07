@@ -14,6 +14,7 @@ in the source distribution for its full text.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pcp/mmv_stats.h>
 
 #include "CPUMeter.h"
 #include "ClockMeter.h"
@@ -28,7 +29,6 @@ in the source distribution for its full text.
 #include "ProcessTable.h"
 #include "Settings.h"
 #include "SysArchMeter.h"
-#include "UptimeMeter.h"
 #include "XUtils.h"
 
 #include "ConfidenceMeter.h"
@@ -81,15 +81,12 @@ const MeterClass* const Platform_meterTypes[] = {
    &ClockMeter_class,
    &DateMeter_class,
    &DateTimeMeter_class,
-   &UptimeMeter_class,
    &HostnameMeter_class,
    &SysArchMeter_class,
    NULL
 };
 
 static const char* Platform_metricNames[] = {
-   [PCP_CONTROL_THREADS] = "proc.control.perclient.threads",
-
    [PCP_TARGET_METRIC] = "mmv.treetop.server.target.metric",
    [PCP_TARGET_TIMESTAMP] = "mmv.treetop.server.target.timestamp",
    [PCP_TARGET_VALUESET] = "mmv.treetop.server.target.valueset",
@@ -180,7 +177,14 @@ size_t Platform_addMetric(Metric id, const char* name) {
 /* global state from the environment and command line arguments */
 pmOptions opts;
 
+static void* MMV_init();
+static void MMV_done(void* map);
+
 bool Platform_init(void) {
+   pcp = xCalloc(1, sizeof(Platform));
+   pcp->map = MMV_init();
+
+#if 0
    const char* source;
    if (opts.context == PM_CONTEXT_ARCHIVE) {
       source = opts.archives[0];
@@ -190,25 +194,35 @@ bool Platform_init(void) {
       opts.context = PM_CONTEXT_HOST;
       source = "local:";
    }
+#endif
 
+   //
+   // TODO: PCP_TMP_DIR for MMV
+   // TODO: exec server.py child process (pass args)
+   // TODO: MMV shared library through local context (server and client)
+   //
+   // but for now, use PMCD:
+   //
    int sts;
-   sts = pmNewContext(opts.context, source);
+   opts.context = PM_CONTEXT_HOST;
+   sts = pmNewContext(opts.context, "local:");
    /* with no host requested, fallback to PM_CONTEXT_LOCAL shared libraries */
-   if (sts < 0 && opts.context == PM_CONTEXT_HOST && opts.nhosts == 0) {
+   if (sts < 0) {
       opts.context = PM_CONTEXT_LOCAL;
       sts = pmNewContext(opts.context, NULL);
    }
    if (sts < 0) {
       fprintf(stderr, "Cannot setup PCP metric source: %s\n", pmErrStr(sts));
+      Platform_done();
       return false;
    }
    /* setup timezones and other general startup preparation completion */
    if (pmGetContextOptions(sts, &opts) < 0 || opts.errors) {
       pmflush();
+      Platform_done();
       return false;
    }
 
-   pcp = xCalloc(1, sizeof(Platform));
    pcp->context = sts;
    pcp->fetch = xCalloc(PCP_METRIC_COUNT, sizeof(pmID));
    pcp->pmids = xCalloc(PCP_METRIC_COUNT, sizeof(pmID));
@@ -220,7 +234,7 @@ bool Platform_init(void) {
       pmtimevalDec(&pcp->offset, &opts.start);
    }
 
-   for (unsigned int i = 0; i < PCP_METRIC_COUNT; i++)
+   for (size_t i = 0; i < PCP_METRIC_COUNT; i++)
       Platform_addMetric(i, Platform_metricNames[i]);
    pcp->meters.offset = PCP_METRIC_COUNT;
 
@@ -247,23 +261,16 @@ bool Platform_init(void) {
       return false;
    }
 
-   /* extract values needed for setup - e.g. cpu count, pid_max */
-   Metric_enable(PCP_TARGET_METRIC, true);
-   Metric_enable(PCP_TARGET_TIMESTAMP, true);
-   Metric_enable(PCP_TARGET_VALUESET, true);
-   Metric_enable(PCP_SAMPLING_COUNT, true);
-   Metric_enable(PCP_SAMPLING_INTERVAL, true);
-   Metric_enable(PCP_MODEL_CONFIDENCE, true);
+   /* extract values needed for default setup */
+   for (size_t i = 0; i < PCP_METRIC_COUNT; i++)
+      Metric_enable(i, true);
 
-   /* enable metrics for all dynamic columns (including those from dynamic screens) */
-   for (size_t i = pcp->columns.offset; i < pcp->columns.offset + pcp->columns.count; i++)
+   /* enable metrics for all dynamic columns and dynamic screens */
+   size_t total = pcp->columns.offset + pcp->columns.count;
+   for (size_t i = pcp->columns.offset; i < total; i++)
       Metric_enable(i, true);
 
    Metric_fetch(NULL);
-
-   /* first sample (fetch) performed above, save constants */
-   Platform_getMaxCPU();
-   Platform_getMaxPid();
 
    return true;
 }
@@ -281,6 +288,7 @@ void Platform_dynamicScreensDone(Hashtable* screens) {
 }
 
 void Platform_done(void) {
+   MMV_done(pcp->map);
    pmDestroyContext(pcp->context);
    if (pcp->result)
       pmFreeResult(pcp->result);
@@ -304,22 +312,22 @@ double Platform_getConfidence(void) {
    return value.d;
 }
 
-void Platform_getFeatures(int* total, int* missing, int* mutual, int* variance) {
+void Platform_getFeatures(size_t* total, size_t* missing, size_t* mutual, size_t* variance) {
    pmAtomValue value;
    if (Metric_values(PCP_FEATURES_TOTAL, &value, 1, PM_TYPE_32) == NULL)
-      *total = -1;
+      *total = 0;
    else
       *total = value.l;
    if (Metric_values(PCP_FEATURES_MISSING, &value, 1, PM_TYPE_32) == NULL)
-      *missing = -1;
+      *missing = 0;
    else
       *missing = value.l;
    if (Metric_values(PCP_FEATURES_MUTUALINFO, &value, 1, PM_TYPE_32) == NULL)
-      *mutual = -1;
+      *mutual = 0;
    else
       *mutual = value.l;
    if (Metric_values(PCP_FEATURES_VARIANCE, &value, 1, PM_TYPE_32) == NULL)
-      *variance = -1;
+      *variance = 0;
    else
       *variance = value.l;
 }
@@ -425,21 +433,25 @@ double* Platform_getTargetValueset(size_t *count, double* maximum) {
    return values;
 }
 
+#if 0
 int Platform_getUptime(void) {
    return 0;
 }
 
 unsigned int Platform_getMaxCPU(void) {
-   1;
+   return 1;
 }
+#endif
 
 pid_t Platform_getMaxPid(void) {
    return INT_MAX;
 }
 
+#if 0
 long long Platform_getBootTime(void) {
    return 0;
 }
+#endif
 
 double Platform_setCPUValues(Meter* this, int cpu) {
    (void)this; (void)cpu;
@@ -599,4 +611,100 @@ void Platform_addDynamicScreenAvailableColumns(Panel* availableColumns, const ch
 void Platform_updateTables(Machine* host) {
    PCPDynamicScreen_appendTables(&pcp->screens, host);
    PCPDynamicColumns_setupWidths(&pcp->columns);
+}
+
+static mmv_metric2_t metrics[] = {
+    {   .name = "target",
+        .item = 1,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Prediction target metric",
+        .helptext = "Predicted metric with optional [instance] specifier.",
+    },
+    {   .name = "filter",
+        .item = 2,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Manual feature reduction metrics",
+        .helptext = "Comma-separated list of metrics removed from training set.",
+    },
+    {   .name = "sampling.count",
+        .item = 3,
+        .type = MMV_TYPE_U32,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Requested training set samples",
+        .helptext = "Historical training data samples requested",
+    },
+    {   .name = "sampling.interval",
+        .item = 4,
+        .type = MMV_TYPE_FLOAT,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
+        .shorttext = "Requested training set sampling interval",
+        .helptext = "Historical training set interval requested",
+    },
+    {   .name = "training.interval",
+        .item = 5,
+        .type = MMV_TYPE_FLOAT,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
+        .shorttext = "Requested training frequency",
+        .helptext = "Requested frequency at which training occurs",
+    },
+    {   .name = "timestamp",
+        .item = 6,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Current prediction timestamp",
+        .helptext = "Prediction time, training ends on prior sample",
+    },
+};
+
+static const char* file = "treetop.client";
+static const char* target = "disk.all.avactive";
+static const char* notrain = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
+static const char* timestamp = "2012-05-10 08:47:47.462172";
+static size_t sample_count = 720;
+static float sample_interval = 10;
+static float training_interval = 10;
+
+static void* MMV_init(void) {
+   // TODO: flags = MMV_FLAG_PROCESS (cull file at stop)
+   mmv_registry_t* registry = mmv_stats_registry(file, 40, 0);
+   void* map;
+
+   if (!registry) {
+      fprintf(stderr, "mmv_stats_registry: %s - %s\n", file, strerror(errno));
+      return NULL;
+   }
+   for (size_t i = 0; i < sizeof(metrics) / sizeof(mmv_metric2_t); i++)
+      mmv_stats_add_metric(registry,
+			   metrics[i].name, metrics[i].item,
+			   metrics[i].type, metrics[i].semantics,
+			   metrics[i].dimension, metrics[i].indom,
+			   metrics[i].shorttext, metrics[i].helptext);
+
+   map = mmv_stats_start(registry);
+   if (!map) {
+      fprintf(stderr, "mmv_stats_start: %s - %s\n", file, strerror(errno));
+      return NULL;
+   }
+
+   mmv_stats_set_string(map, "target", "", target);
+   mmv_stats_set_string(map, "filter", "", notrain);
+   mmv_stats_set_string(map, "timestamp", "", timestamp);
+
+   mmv_stats_set(map, "sampling.count", "", sample_count);
+   mmv_stats_set(map, "sampling.interval", "", sample_interval);
+   mmv_stats_set(map, "training.interval", "", training_interval);
+
+   return map;
+}
+
+static void MMV_done(void* map) {
+   mmv_stats_stop(file, map);
 }

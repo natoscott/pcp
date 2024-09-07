@@ -50,10 +50,10 @@ typedef struct Platform_ {
    PCPDynamicColumns columns; /* dynamic columns via configuration files */
    PCPDynamicScreens screens; /* dynamic screens via configuration files */
    struct timeval offset;     /* time offset used in archive mode only */
-   long long btime;           /* boottime in seconds since the epoch */
    char* release;             /* uname and distro from this context */
    int pidmax;                /* maximum platform process identifier */
    unsigned int ncpu;         /* maximum processor count configured */
+   void* map;                 /* mapped memory for server communication */
 } Platform;
 
 extern const ScreenDefaults Platform_defaultScreens[];
@@ -74,7 +74,7 @@ void Platform_setBindings(Htop_Action* keys);
 
 double Platform_getConfidence(void);
 
-void Platform_getFeatures(int* total, int* missing, int* mutual, int* variance);
+void Platform_getFeatures(size_t* total, size_t* missing, size_t* mutual, size_t* variance);
 
 double Platform_getSampleInterval(void);
 

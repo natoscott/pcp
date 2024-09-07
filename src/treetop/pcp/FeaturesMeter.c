@@ -20,7 +20,7 @@ static const int FeaturesMeter_attributes[] = {
 };
 
 static void FeaturesMeter_updateValues(Meter* this) {
-   int total, missing, mutual, variance;
+   size_t total, missing, mutual, variance;
    Platform_getFeatures(&total, &mutual, &missing, &variance);
 
    this->total = MAXIMUM(total, this->total);
@@ -29,7 +29,7 @@ static void FeaturesMeter_updateValues(Meter* this) {
    this->values[2] = mutual == -1 ? NAN : missing;
    this->values[3] = variance == -1 ? NAN : variance;
 
-   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%dtot %dvar %dmi %dnan", total, variance, mutual, missing);
+   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuvar %zumi %zunan", total, variance, mutual, missing);
 }
 
 const MeterClass FeaturesMeter_class = {

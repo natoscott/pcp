@@ -22,8 +22,6 @@ in the source distribution for its full text.
 
 
 typedef enum Metric_ {
-   PCP_CONTROL_THREADS,         /* proc.control.perclient.threads */
-
    PCP_TARGET_METRIC,		/* treetop.server.target.metric */
    PCP_TARGET_TIMESTAMP,	/* treetop.server.target.timestamp */
    PCP_TARGET_VALUESET,		/* treetop.server.target.valueset */
@@ -64,8 +62,6 @@ typedef enum Metric_ {
 void Metric_enable(Metric metric, bool enable);
 
 bool Metric_enabled(Metric metric);
-
-void Metric_enableThreads(void);
 
 bool Metric_fetch(struct timeval* timestamp);
 

@@ -127,7 +127,7 @@ static void Settings_defaultMeters_delete(Settings* this) {
 
 #ifdef BUILD_TREETOP
 static void Settings_defaultMeters(Settings* this, const Machine* host) {
-   size_t sizes[] = { 4, 5 };
+   size_t sizes[] = { 4, 7 };
 
    Settings_defaultMeters_delete(this);
 
@@ -157,6 +157,10 @@ static void Settings_defaultMeters(Settings* this, const Machine* host) {
    this->hColumns[1].modes[3] = TEXT_METERMODE;
    this->hColumns[1].names[4] = xStrdup("Confidence");
    this->hColumns[1].modes[4] = TEXT_METERMODE;
+   this->hColumns[1].names[5] = xStrdup("Blank");
+   this->hColumns[1].modes[5] = TEXT_METERMODE;
+   this->hColumns[1].names[6] = xStrdup("ProcessingState");
+   this->hColumns[1].modes[6] = TEXT_METERMODE;
 }
 #else
 static void Settings_defaultMeters(Settings* this, Machine* host) {

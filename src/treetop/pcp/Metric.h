@@ -25,6 +25,7 @@ typedef enum Metric_ {
    PCP_TARGET_METRIC,		/* treetop.server.target.metric */
    PCP_TARGET_TIMESTAMP,	/* treetop.server.target.timestamp */
    PCP_TARGET_VALUESET,		/* treetop.server.target.valueset */
+   PCP_PROCESSING_STATE,	/* treetop.server.processing.state */
    PCP_SAMPLING_COUNT,		/* treetop.server.sampling.count */
    PCP_SAMPLING_INTERVAL,	/* treetop.server.sampling.interval */
    PCP_SAMPLING_ELAPSED,	/* treetop.server.sampling.elapsed_time */

@@ -165,6 +165,7 @@ TREETOPCFILES = \
 	pcp/ConfidenceMeter.c \
 	pcp/ElapsedTimeMeter.c \
 	pcp/FeaturesMeter.c \
+	pcp/ProcessingStateMeter.c \
 	pcp/SampleIntervalMeter.c \
 	pcp/SamplingTimeMeter.c \
 	pcp/TargetMetricMeter.c \
@@ -182,6 +183,7 @@ TREETOPHFILES = \
 	pcp/ConfidenceMeter.h \
 	pcp/ElapsedTimeMeter.h \
 	pcp/FeaturesMeter.h \
+	pcp/ProcessingStateMeter.h \
 	pcp/SampleIntervalMeter.h \
 	pcp/SamplingTimeMeter.h \
 	pcp/TargetMetricMeter.h \

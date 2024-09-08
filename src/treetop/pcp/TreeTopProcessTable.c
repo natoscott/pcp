@@ -26,6 +26,7 @@ in the source distribution for its full text.
 
 #include "pcp/Metric.h"
 #include "pcp/PCPMachine.h"
+#include "pcp/TreeTop.h"
 #include "pcp/TreeTopProcess.h"
 
 
@@ -121,6 +122,7 @@ static bool TreeTopProcessTable_updateProcesses(TreeTopProcessTable* this) {
 }
 
 void ProcessTable_goThroughEntries(ProcessTable* super) {
+   Platform_updateMap();
    TreeTopProcessTable* this = (TreeTopProcessTable*) super;
    TreeTopProcessTable_updateProcesses(this);
 }

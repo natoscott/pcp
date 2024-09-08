@@ -34,6 +34,7 @@ in the source distribution for its full text.
 #include "ConfidenceMeter.h"
 #include "ElapsedTimeMeter.h"
 #include "FeaturesMeter.h"
+#include "ProcessingStateMeter.h"
 #include "SampleIntervalMeter.h"
 #include "SamplingTimeMeter.h"
 #include "TargetMetricMeter.h"
@@ -70,6 +71,7 @@ const MeterClass* const Platform_meterTypes[] = {
    &ConfidenceMeter_class,
    &ElapsedTimeMeter_class,
    &FeaturesMeter_class,
+   &ProcessingStateMeter_class,
    &SampleIntervalMeter_class,
    &SamplingTimeMeter_class,
    &TargetMetricMeter_class,
@@ -90,6 +92,7 @@ static const char* Platform_metricNames[] = {
    [PCP_TARGET_METRIC] = "mmv.treetop.server.target.metric",
    [PCP_TARGET_TIMESTAMP] = "mmv.treetop.server.target.timestamp",
    [PCP_TARGET_VALUESET] = "mmv.treetop.server.target.valueset",
+   [PCP_PROCESSING_STATE] = "mmv.treetop.server.processing.state",
    [PCP_SAMPLING_COUNT] = "mmv.treetop.server.sampling.count",
    [PCP_SAMPLING_INTERVAL] = "mmv.treetop.server.sampling.interval",
    [PCP_SAMPLING_ELAPSED] = "mmv.treetop.server.sampling.elapsed_time",
@@ -179,10 +182,12 @@ pmOptions opts;
 
 static void* MMV_init();
 static void MMV_done(void* map);
+static void MMV_update(void* map, double time);
 
 bool Platform_init(void) {
    pcp = xCalloc(1, sizeof(Platform));
    pcp->map = MMV_init();
+   MMV_update(pcp->map, 0.0);
 
 #if 0
    const char* source;
@@ -387,6 +392,13 @@ double Platform_getSamplingTime(void) {
    if (Metric_values(PCP_SAMPLING_ELAPSED, &value, 1, PM_TYPE_DOUBLE) == NULL)
       return 0.0;
    return value.d;
+}
+
+char* Platform_getProcessingState(void) {
+   pmAtomValue value;
+   if (Metric_values(PCP_PROCESSING_STATE, &value, 1, PM_TYPE_STRING) == NULL)
+      return NULL;
+   return value.cp;
 }
 
 double Platform_getTrainingWindow(void) {
@@ -613,6 +625,10 @@ void Platform_updateTables(Machine* host) {
    PCPDynamicColumns_setupWidths(&pcp->columns);
 }
 
+void Platform_updateMap(void) {
+   MMV_update(pcp->map, Platform_getTargetTimestamp());
+}
+
 static mmv_metric2_t metrics[] = {
     {   .name = "target",
         .item = 1,
@@ -692,7 +708,6 @@ static void* MMV_init(void) {
       fprintf(stderr, "mmv_stats_start: %s - %s\n", file, strerror(errno));
       return NULL;
    }
-   MMV_update(map, 0.0);
    return map;
 }
 

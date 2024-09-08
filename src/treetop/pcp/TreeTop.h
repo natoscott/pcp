@@ -76,6 +76,8 @@ double Platform_getConfidence(void);
 
 void Platform_getFeatures(size_t* total, size_t* missing, size_t* mutual, size_t* variance);
 
+char* Platform_getProcessingState(void);
+
 double Platform_getSampleInterval(void);
 
 double Platform_getSamplingTime(void);
@@ -169,6 +171,6 @@ void Platform_dynamicScreensDone(Hashtable* screens);
 
 void Platform_updateTables(Machine* host);
 
-void MMV_update(void* map, double timestamp);
+void Platform_updateMap(void);
 
 #endif

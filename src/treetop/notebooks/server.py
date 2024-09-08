@@ -32,8 +32,8 @@ from cpmapi import ( pmSetContextOptions, PM_COUNT_ONE, PM_TIME_SEC,
                      PM_TYPE_FLOAT, PM_TYPE_DOUBLE, PM_TYPE_STRING,
                      PM_INDOM_NULL )
 from cmmv import ( MMV_SEM_INSTANT, MMV_SEM_DISCRETE, MMV_SEM_COUNTER,
-                   MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_STRING,
-                   MMV_FLAG_SENTINEL )
+                   MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_DOUBLE,
+                   MMV_TYPE_STRING, MMV_FLAG_SENTINEL )
 
 permutation_importance = False # toggle, expensive to calculate though
 try:
@@ -258,7 +258,7 @@ class TreetopServer():
                               helptext = "Predicted and explained metrics"),
                    mmv.mmv_metric(name = "target.timestamp",
                               item = 1,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Timestamp in seconds for explanatory models",
@@ -297,13 +297,13 @@ class TreetopServer():
                               shorttext = "Count of samples in the training set"),
                    mmv.mmv_metric(name = "sampling.interval",
                               item = 31,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Training data sampling interval"),
                    mmv.mmv_metric(name = "sampling.elapsed_time",
                               item = 32,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time to fetch metric values",
@@ -316,13 +316,13 @@ class TreetopServer():
                               shorttext = "Count of training iterations completed"),
                    mmv.mmv_metric(name = "training.interval",
                               item = 61,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Training interval in seconds"),
                    mmv.mmv_metric(name = "training.window",
                               item = 61,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Training window size in seconds"),
@@ -334,7 +334,7 @@ class TreetopServer():
                               shorttext = "Number of XGBoost iterations of boosting"),
                    mmv.mmv_metric(name = "training.elapsed_time",
                               item = 64,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time to train models",
@@ -410,7 +410,7 @@ class TreetopServer():
                                   "important feature and target variables)"),
                    mmv.mmv_metric(name = "explaining.model.elapsed_time",
                               item = 204,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for model-based explanations"),
@@ -446,7 +446,7 @@ class TreetopServer():
                                 " feature importance (PFI) based explanation."),
                    mmv.mmv_metric(name = "explaining.pfi.elapsed_time",
                               item = 209,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for permutation-based explanations"),
@@ -475,7 +475,7 @@ class TreetopServer():
                                 " importance explanations (compared to target)."),
                    mmv.mmv_metric(name = "explaining.shap.elapsed_time",
                               item = 213,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for SHAP-based explanations"),
@@ -523,7 +523,7 @@ class TreetopServer():
                               shorttext = "Min-perturbed optimisation feature names"),
                    mmv.mmv_metric(name = "optimising.elapsed_time",
                               item = 220,
-                              typeof = MMV_TYPE_FLOAT,
+                              typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for permutation-based optimisation explanation"),
@@ -559,11 +559,13 @@ class TreetopServer():
         if self.sample_time() <= 0.0:
             self.timestamp = min(self.start_time + timewindow, self.end_time)
             reset = 'full'
-        elif self.sample_time() != self.timestamp:
-            self.timestamp = self.sample_time()
-            reset = 'full'
+        #elif self.sample_time() != self.timestamp:
+        #    self.timestamp = self.sample_time()
+        #    print('RESET NE:', str(datetime.fromtimestamp(self.sample_time())), 'vs', str(datetime.fromtimestamp(self.timestamp)))
+        #    reset = 'full'
         else:
             self.timestamp += self._sample_interval
+            print('STEP FWD:', str(datetime.fromtimestamp(self.timestamp)))
         self.timestamp_s = str(datetime.fromtimestamp(self.timestamp))
 
         values = self.values
@@ -584,9 +586,9 @@ class TreetopServer():
         value = values.lookup_mapping("training.window", None)
         values.set(value, timewindow)
 
-        print("Training interval:", self.training_interval())
-        print("Sample interval:", self.sample_interval())
-        print("Sample count:", self.sample_count())
+        print("Training interval:", self._training_interval)
+        print("Sample interval:", self._sample_interval)
+        print("Sample count:", self._sample_count)
         print("Timestamp:", self.timestamp_s, '-', self.timestamp)
         print("Target metric:", self.target())
         print("Filter metrics:", self.filter().split())
@@ -711,11 +713,10 @@ class TreetopServer():
     def prepare_dataset(self, reset='full'):
         # refresh from the metrics source to form a pandas dataframe
 
-        if reset == 'full' and self.df is not None:
-            self.df = None
+        #if reset == 'full' and self.df is not None:
+        #    self.df = None
+        self.df = None
 
-        value = self.values.lookup_mapping("target.timestamp", None)
-        self.values.set(value, self.timestamp)
         origin = pmapi.timespec(self.timestamp)
         delta = pmapi.timespec(self.sample_interval())
         count = self.sample_count()

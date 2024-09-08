@@ -656,7 +656,7 @@ static mmv_metric2_t metrics[] = {
     },
     {   .name = "sampling.interval",
         .item = 4,
-        .type = MMV_TYPE_FLOAT,
+        .type = MMV_TYPE_DOUBLE,
         .semantics = MMV_SEM_INSTANT,
         .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
         .shorttext = "Requested training set sampling interval",
@@ -664,7 +664,7 @@ static mmv_metric2_t metrics[] = {
     },
     {   .name = "training.interval",
         .item = 5,
-        .type = MMV_TYPE_FLOAT,
+        .type = MMV_TYPE_DOUBLE,
         .semantics = MMV_SEM_INSTANT,
         .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
         .shorttext = "Requested training frequency",
@@ -672,20 +672,30 @@ static mmv_metric2_t metrics[] = {
     },
     {   .name = "timestamp",
         .item = 6,
-        .type = MMV_TYPE_FLOAT,
+        .type = MMV_TYPE_DOUBLE,
         .semantics = MMV_SEM_INSTANT,
         .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
         .shorttext = "Current prediction timestamp (time since the epoch)",
         .helptext = "Prediction time, training ends on prior sample",
     },
+    {   .name = "timestamp_s",
+        .item = 7,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_INSTANT,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Current prediction timestamp (time since the epoch)",
+        .helptext = "Prediction time string, training ends on prior sample",
+    },
 };
 
 static const char* file = "treetop.client";
+
+/* command line options... */
 static const char* target = "disk.all.avactive";
 static const char* notrain = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
 static size_t sample_count = 720;
 static double sample_interval = 10;
-static double training_interval = 10;
+static double training_interval = 1;
 
 static void* MMV_init(void) {
    // TODO: flags = MMV_FLAG_PROCESS (cull file at stop) --v
@@ -698,10 +708,10 @@ static void* MMV_init(void) {
    }
    for (size_t i = 0; i < sizeof(metrics) / sizeof(mmv_metric2_t); i++)
       mmv_stats_add_metric(registry,
-			   metrics[i].name, metrics[i].item,
-			   metrics[i].type, metrics[i].semantics,
-			   metrics[i].dimension, metrics[i].indom,
-			   metrics[i].shorttext, metrics[i].helptext);
+                           metrics[i].name, metrics[i].item,
+                           metrics[i].type, metrics[i].semantics,
+                           metrics[i].dimension, metrics[i].indom,
+                           metrics[i].shorttext, metrics[i].helptext);
 
    map = mmv_stats_start(registry);
    if (!map) {
@@ -712,10 +722,24 @@ static void* MMV_init(void) {
 }
 
 void MMV_update(void* map, double timestamp) {
+   struct tm tms;
+   size_t length;
+   double sample_time = timestamp;
+   time_t seconds = (int)timestamp;
+   char buffer[64];
+
+   timestamp -= seconds;
+   timestamp *= 1000000; // usec component
+   pmLocaltime(&seconds, &tms);
+   length = strftime(buffer, sizeof(buffer), "%F %H:%M:%S", &tms);
+   if ((int)timestamp > 0)
+       snprintf(buffer+length, sizeof(buffer)-length, ".%d", (int)timestamp);
+
    mmv_stats_set_string(map, "target", "", target);
    mmv_stats_set_string(map, "filter", "", notrain);
+   mmv_stats_set_string(map, "timestamp_s", "", buffer);
 
-   mmv_stats_set(map, "timestamp", "", timestamp);
+   mmv_stats_set(map, "timestamp", "", sample_time);
    mmv_stats_set(map, "sampling.count", "", sample_count);
    mmv_stats_set(map, "sampling.interval", "", sample_interval);
    mmv_stats_set(map, "training.interval", "", training_interval);

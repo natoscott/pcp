@@ -116,16 +116,56 @@ static bool Settings_validateMeters(Settings* this) {
    return anyMeter;
 }
 
-static void Settings_defaultMeters(Settings* this, const Machine* host) {
+static void Settings_defaultMeters_delete(Settings* this) {
+   // Release any previously allocated memory
+   for (size_t i = 0; i < HeaderLayout_getColumns(this->hLayout); i++) {
+      String_freeArray(this->hColumns[i].names);
+      free(this->hColumns[i].modes);
+   }
+   free(this->hColumns);
+}
+
+#ifdef BUILD_TREETOP
+static void Settings_defaultMeters(Settings* this, Machine* host) {
+   int sizes[] = { 4, 4 };
+
+   Settings_defaultMeters_delete(this);
+
+   this->hLayout = HF_TWO_67_33;
+   this->hColumns = xCalloc(HeaderLayout_getColumns(this->hLayout), sizeof(MeterColumnSetting));
+   for (size_t i = 0; i < 2; i++) {
+      this->hColumns[i].names = xCalloc(sizes[i], sizeof(*this->hColumns[0].names));
+      this->hColumns[i].modes = xCalloc(sizes[i], sizeof(*this->hColumns[0].modes));
+      this->hColumns[i].len = sizes[i];
+   }
+
+   this->hColumns[0].names[0] = xStrdup("TargetMetric");
+   this->hColumns[0].modes[0] = TEXT_METERMODE;
+   this->hColumns[0].names[1] = xStrdup("TargetTimestamp");
+   this->hColumns[0].modes[1] = TEXT_METERMODE;
+   this->hColumns[0].names[2] = xStrdup("TargetValue");
+   this->hColumns[0].modes[2] = TEXT_METERMODE;
+   this->hColumns[0].names[3] = xStrdup("TargetValue");
+   this->hColumns[0].modes[3] = GRAPH_METERMODE;
+   this->hColumns[1].names[0] = xStrdup("ElapsedTime");
+   this->hColumns[1].modes[0] = BAR_METERMODE;
+   this->hColumns[1].names[1] = xStrdup("WindowSize");
+   this->hColumns[1].modes[1] = TEXT_METERMODE;
+   this->hColumns[1].names[2] = xStrdup("Features");
+   this->hColumns[1].modes[2] = TEXT_METERMODE;
+   this->hColumns[1].names[3] = xStrdup("Confidence");
+   this->hColumns[1].modes[3] = TEXT_METERMODE;
+}
+#else
+static void Settings_defaultMeters(Settings* this, Machine* host) {
    unsigned int initialCpuCount = host->activeCPUs;
-   size_t sizes[] = { 3, 3 };
+   int sizes[] = { 3, 3 };
 
    if (initialCpuCount > 4 && initialCpuCount <= 128) {
       sizes[1]++;
    }
 
-   // Release any previously allocated memory
-   Settings_deleteColumns(this);
+   Settings_defaultMeters_delete(this);
 
    this->hLayout = HF_TWO_50_50;
    this->hColumns = xCalloc(HeaderLayout_getColumns(this->hLayout), sizeof(MeterColumnSetting));
@@ -176,6 +216,7 @@ static void Settings_defaultMeters(Settings* this, const Machine* host) {
    this->hColumns[1].names[r] = xStrdup("Uptime");
    this->hColumns[1].modes[r++] = TEXT_METERMODE;
 }
+#endif
 
 static const char* toFieldName(Hashtable* columns, int id, bool* enabled) {
    if (id < 0) {
@@ -211,6 +252,7 @@ static int toFieldIndex(Hashtable* columns, const char* str) {
             unsigned int key;
             *end = '\0';
             success = DynamicColumn_search(columns, dynamic, &key) != NULL;
+fprintf(stderr, "DynamicColumn_search: %s is %s\n", dynamic, success? "t":"f");
             *end = ')';
             if (success)
                return key;

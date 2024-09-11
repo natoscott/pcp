@@ -1,0 +1,21 @@
+#
+# pcp-htop(1) configuration file - see pcp-htop(5)
+#
+
+[shap]
+heading = SHAP
+caption = SHAP-based local metric importance
+
+features.heading = Important metrics
+features.metric = mmv.treetop.server.explaining.shap.features
+features.width = 55
+
+importance.heading = VALUE
+importance.caption = SHAP Values
+importance.metric = mmv.treetop.server.explaining.shap.value
+importance.width = 10
+
+mutual.heading = MUTUALINFO
+mutual.caption = Mutual information for high SHAP value features
+mutual.metric = mmv.treetop.server.explaining.shap.mutual_information
+mutual.width = 10

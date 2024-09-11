@@ -305,9 +305,9 @@ void PCPDynamicScreens_init(PCPDynamicScreens* screens, PCPDynamicColumns* colum
 
    /* next, search in home directory alongside htoprc */
    if (xdgConfigHome)
-      path = String_cat(xdgConfigHome, "/htop/screens/");
+      path = String_cat(xdgConfigHome, "/" PACKAGE_NAME "/screens/");
    else if (home)
-      path = String_cat(home, CONFIGDIR "/htop/screens/");
+      path = String_cat(home, CONFIGDIR "/" PACKAGE_NAME "/screens/");
    else
       path = NULL;
    if (path) {
@@ -316,12 +316,12 @@ void PCPDynamicScreens_init(PCPDynamicScreens* screens, PCPDynamicColumns* colum
    }
 
    /* next, search in the system screens directory */
-   path = String_cat(sysconf, "/htop/screens/");
+   path = String_cat(sysconf, "/" PACKAGE_NAME "/screens/");
    PCPDynamicScreen_scanDir(screens, path);
    free(path);
 
    /* next, try the readonly system screens directory */
-   path = String_cat(share, "/htop/screens/");
+   path = String_cat(share, "/" PACKAGE_NAME "/screens/");
    PCPDynamicScreen_scanDir(screens, path);
    free(path);
 

@@ -271,9 +271,9 @@ void PCPDynamicMeters_init(PCPDynamicMeters* meters) {
 
    /* next, search in home directory alongside htoprc */
    if (xdgConfigHome)
-      path = String_cat(xdgConfigHome, "/htop/meters/");
+      path = String_cat(xdgConfigHome, "/" PACKAGE_NAME "/meters/");
    else if (home)
-      path = String_cat(home, CONFIGDIR "/htop/meters/");
+      path = String_cat(home, CONFIGDIR "/" PACKAGE_NAME "/meters/");
    else
       path = NULL;
    if (path) {
@@ -282,12 +282,12 @@ void PCPDynamicMeters_init(PCPDynamicMeters* meters) {
    }
 
    /* next, search in the system meters directory */
-   path = String_cat(sysconf, "/htop/meters/");
+   path = String_cat(sysconf, "/" PACKAGE_NAME "/meters/");
    PCPDynamicMeter_scanDir(meters, path);
    free(path);
 
    /* next, try the readonly system meters directory */
-   path = String_cat(share, "/htop/meters/");
+   path = String_cat(share, "/" PACKAGE_NAME "/meters/");
    PCPDynamicMeter_scanDir(meters, path);
    free(path);
 }

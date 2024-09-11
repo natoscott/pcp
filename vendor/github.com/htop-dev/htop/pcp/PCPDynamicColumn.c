@@ -228,9 +228,9 @@ void PCPDynamicColumns_init(PCPDynamicColumns* columns) {
 
    /* next, search in home directory alongside htoprc */
    if (xdgConfigHome)
-      path = String_cat(xdgConfigHome, "/htop/columns/");
+      path = String_cat(xdgConfigHome, "/" PACKAGE_NAME "/columns/");
    else if (home)
-      path = String_cat(home, CONFIGDIR "/htop/columns/");
+      path = String_cat(home, CONFIGDIR "/" PACKAGE_NAME "/columns/");
    else
       path = NULL;
    if (path) {
@@ -239,12 +239,12 @@ void PCPDynamicColumns_init(PCPDynamicColumns* columns) {
    }
 
    /* next, search in the system columns directory */
-   path = String_cat(sysconf, "/htop/columns/");
+   path = String_cat(sysconf, "/" PACKAGE_NAME "/columns/");
    PCPDynamicColumn_scanDir(columns, path);
    free(path);
 
    /* next, try the readonly system columns directory */
-   path = String_cat(share, "/htop/columns/");
+   path = String_cat(share, "/" PACKAGE_NAME "/columns/");
    PCPDynamicColumn_scanDir(columns, path);
    free(path);
 }

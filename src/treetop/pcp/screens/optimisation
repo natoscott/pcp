@@ -1,0 +1,39 @@
+#
+# pcp-htop(1) configuration file - see pcp-htop(5)
+#
+
+[minimisation]
+heading = Minima
+caption = Permutation-based optimisation importance using minima
+
+features.heading = Key Metrics for Optimisation
+features.metric = mmv.treetop.server.optimising.minima.features
+features.width = 55
+
+change.heading = DELTA
+change.caption = Change in prediction with minima permutations
+change.metric = mmv.treetop.server.optimising.minima.change
+change.width = 6
+
+direction.heading = DIRECTION
+direction.caption = Direction of change with minima permutations
+direction.metric = mmv.treetop.server.optimising.minima.direction
+direction.width = 10
+
+[maximisation]
+heading = Maxima
+caption = Permutation-based optimisation importance using maxima
+
+features.heading = Key Metrics for Optimisation
+features.metric = mmv.treetop.server.optimising.maxima.features
+features.width = 55
+
+change.heading = DELTA
+change.caption = Change in prediction with maxima permutations
+change.metric = mmv.treetop.server.optimising.maxima.change
+change.width = 6
+
+direction.heading = DIRECTION
+direction.caption = Direction of change with maxima permutations
+direction.metric = mmv.treetop.server.optimising.maxima.direction
+direction.width = 10

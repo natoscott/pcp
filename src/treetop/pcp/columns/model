@@ -1,0 +1,23 @@
+#
+# pcp-htop(1) configuration file - see pcp-htop(5)
+#
+
+[features]
+heading = Key Explanatory Metrics
+metric = mmv.treetop.server.explaining.model.features
+description = Most important metrics (features) globally
+width = 55
+
+[importance]
+heading = IMPORTANCE
+caption = Feature Importance
+metric = mmv.treetop.server.explaining.model.importance
+description = Model-based feature importance measure
+width = 10
+
+[mutualinfo]
+heading = MUTUALINFO
+caption = Mutual Information
+metric = mmv.treetop.server.explaining.model.mutual_information
+description = Mutual information with the target variable
+width = 10

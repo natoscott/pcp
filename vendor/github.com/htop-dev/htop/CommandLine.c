@@ -110,7 +110,11 @@ static CommandLineStatus parseArguments(int argc, char** argv, CommandLineSettin
       .allowUnicode = true,
       .highlightChanges = false,
       .highlightDelaySecs = -1,
+#ifdef BUILD_TREETOP
+      .readonly = true,
+#else
       .readonly = false,
+#endif
    };
 
    const struct option long_opts[] =

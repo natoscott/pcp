@@ -25,7 +25,6 @@ in the source distribution for its full text.
 
 const ProcessFieldData Process_fields[] = {
    [0] = { .name = "" },
-   [PID] = { .name = "PID", .title = "PID", .description = "Process/thread ID", .flags = 0, .pidColumn = true, },
    [FEATURE] = { .name = "FEATURE", .title = "                                Key Explanatory Metrics ", .description = "Most important metrics (features) globally" },
    [IMPORTANCE] = { .name = "IMPORTANCE", .title = "IMPORTANCE ", .description = "Model-based feature importance measure" },
    [MUTUALINFO] = { .name = "MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information with the target variable" },
@@ -68,10 +67,20 @@ static void TreeTop_writeValue(RichString* str, double value) {
 
    if (!isNonnegative(value)) {
       RichString_appendAscii(str, shadowColor, "        N/A ");
-   } else {
-      int len = snprintf(buffer, sizeof(buffer), " %9.5f ", value);
-      RichString_appendnAscii(str, shadowColor, buffer, len);
+      return;
    }
+
+   int len;
+   if (value < 1.0)
+      len = snprintf(buffer, sizeof(buffer), " %9.5f ", value);
+   else if ((double)(int)value == value)
+      len = snprintf(buffer, sizeof(buffer), " %9.0f ", value);
+   else
+      len = snprintf(buffer, sizeof(buffer), " %9.1f ", value);
+   if (len < 0)
+      RichString_appendAscii(str, shadowColor, "        ??? ");
+   else
+      RichString_appendnAscii(str, shadowColor, buffer, len);
 }
 
 static void TreeTopProcess_rowWriteField(const Row* super, RichString* str, ProcessField field) {

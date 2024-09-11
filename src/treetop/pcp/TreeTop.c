@@ -403,11 +403,11 @@ char* Platform_getTargetMetric(void) {
    return value.cp;
 }
 
-char* Platform_getTargetTimestamp(void) {
+double Platform_getTargetTimestamp(void) {
    pmAtomValue value;
-   if (Metric_values(PCP_TARGET_TIMESTAMP, &value, 1, PM_TYPE_STRING) == NULL)
-      return NULL;
-   return value.cp;
+   if (Metric_values(PCP_TARGET_TIMESTAMP, &value, 1, PM_TYPE_DOUBLE) == NULL)
+      return 0.0;
+   return value.d;
 }
 
 double* Platform_getTargetValueset(size_t *count, double* maximum) {
@@ -656,10 +656,10 @@ static mmv_metric2_t metrics[] = {
     },
     {   .name = "timestamp",
         .item = 6,
-        .type = MMV_TYPE_STRING,
+        .type = MMV_TYPE_FLOAT,
         .semantics = MMV_SEM_INSTANT,
-        .dimension = MMV_UNITS(0,0,0,0,0,0),
-        .shorttext = "Current prediction timestamp",
+        .dimension = MMV_UNITS(0,1,0,0,PM_TIME_SEC,0),
+        .shorttext = "Current prediction timestamp (time since the epoch)",
         .helptext = "Prediction time, training ends on prior sample",
     },
 };
@@ -667,13 +667,12 @@ static mmv_metric2_t metrics[] = {
 static const char* file = "treetop.client";
 static const char* target = "disk.all.avactive";
 static const char* notrain = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
-static const char* timestamp = "2012-05-10 08:47:47.462172";
 static size_t sample_count = 720;
-static float sample_interval = 10;
-static float training_interval = 10;
+static double sample_interval = 10;
+static double training_interval = 10;
 
 static void* MMV_init(void) {
-   // TODO: flags = MMV_FLAG_PROCESS (cull file at stop)
+   // TODO: flags = MMV_FLAG_PROCESS (cull file at stop) --v
    mmv_registry_t* registry = mmv_stats_registry(file, 40, 0);
    void* map;
 
@@ -693,16 +692,18 @@ static void* MMV_init(void) {
       fprintf(stderr, "mmv_stats_start: %s - %s\n", file, strerror(errno));
       return NULL;
    }
+   MMV_update(map, 0.0);
+   return map;
+}
 
+void MMV_update(void* map, double timestamp) {
    mmv_stats_set_string(map, "target", "", target);
    mmv_stats_set_string(map, "filter", "", notrain);
-   mmv_stats_set_string(map, "timestamp", "", timestamp);
 
+   mmv_stats_set(map, "timestamp", "", timestamp);
    mmv_stats_set(map, "sampling.count", "", sample_count);
    mmv_stats_set(map, "sampling.interval", "", sample_interval);
    mmv_stats_set(map, "training.interval", "", training_interval);
-
-   return map;
 }
 
 static void MMV_done(void* map) {

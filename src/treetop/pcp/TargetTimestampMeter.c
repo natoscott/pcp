@@ -20,8 +20,17 @@ static const int TargetTimestampMeter_attributes[] = {
 };
 
 static void TargetTimestampMeter_updateValues(Meter* this) {
-   char* target = Platform_getTargetTimestamp();
-   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%s", target);
+   double target = Platform_getTargetTimestamp();
+   struct tm tms;
+   time_t seconds = (int)target;
+   char buffer[64];
+
+   target -= seconds;
+   target *= 1000000; // usec component
+   pmLocaltime(&seconds, &tms);
+   // 2012-05-10 08:47:47.462172
+   strftime(buffer, sizeof(buffer), "%F %H:%M:%S", &tms);
+   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%s.%d", buffer, (int)target);
 }
 
 const MeterClass TargetTimestampMeter_class = {

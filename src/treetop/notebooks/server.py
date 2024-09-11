@@ -133,7 +133,6 @@ class TreetopServer():
     """ MMV metrics for treetop server (predict+explain) utility """
 
     _exit_code = 1  # failure is the default
-    _max_targets = 5  # prediction target variables count
     _max_features = 15  # number of feature importances reported
     _sample_count = 720  # number of samples in training set
     _sample_interval = 15  # metrics sampling interval (seconds)
@@ -149,6 +148,8 @@ class TreetopServer():
         self.client = None
         self.source = None
         self.datasets = None
+        self.timestamp = None
+        self.timestamp_s = None
         self.start_time = None
         self.end_time = None
         self.mutualinfo = None
@@ -249,20 +250,28 @@ class TreetopServer():
         indoms[5].set_instances(sample_valueset)
 
         metrics = [mmv.mmv_metric(name = "target.metric",
-                              item = 1,
+                              item = 0,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               shorttext = "Prediction targets",
                               helptext = "Predicted and explained metrics"),
                    mmv.mmv_metric(name = "target.timestamp",
+                              item = 1,
+                              typeof = MMV_TYPE_FLOAT,
+                              semantics = MMV_SEM_INSTANT,
+                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
+                              shorttext = "Timestamp in seconds for explanatory models",
+                              helptext = "Timestamp providing the target time "
+                                  "for inference and explanations."),
+                   mmv.mmv_metric(name = "target.timestamp_s",
                               item = 2,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              shorttext = "Target timestamp for all modelling",
-                              helptext = "Timestamp string providing target "
-                                  "time for inference and explanations."),
+                              shorttext = "Timestamp string for explanatory models",
+                              helptext = "Timestamp string providing the target time "
+                                  "for inference and explanations."),
                    mmv.mmv_metric(name = "target.valueset",
                               item = 3,
                               typeof = MMV_TYPE_FLOAT,
@@ -526,33 +535,58 @@ class TreetopServer():
     def settings(self):
         """ Prepare all default settings with input from client program """
         self._training_count += 1
-        values = self.values
 
+        reset = 'partial'
+        if self.sample_count() != self._sample_count:
+            self._sample_count = self.sample_count()
+            reset = 'full'
+        if self.sample_interval() != self._sample_interval:
+            self._sample_interval = self.sample_interval()
+            reset = 'full'
+        if self.training_interval() != self._training_interval:
+            self._training_interval = self.training_interval()
+        timewindow = self._sample_count * self._sample_interval
+        if self.sample_time() <= 0.0:
+            self.timestamp = min(self.start_time + timewindow, self.end_time)
+            reset = 'full'
+        elif self.sample_time() != self.timestamp:
+            self.timestamp = self.sample_time()
+            reset = 'full'
+        else:
+            self.timestamp += self._sample_interval
+        self.timestamp_s = str(datetime.fromtimestamp(self.timestamp))
+
+        values = self.values
         value = values.lookup_mapping("target.metric", None)
         values.set_string(value, self.target())
         value = values.lookup_mapping("target.timestamp", None)
-        values.set_string(value, self.timestamp())
-
+        values.set(value, self.timestamp)
+        value = values.lookup_mapping("target.timestamp_s", None)
+        values.set_string(value, self.timestamp_s)
         value = values.lookup_mapping("sampling.count", None)
         values.set(value, self._sample_count)
         value = values.lookup_mapping("sampling.interval", None)
         values.set(value, self._sample_interval)
         self._refresh = values.lookup_mapping("training.count", None)
         values.set(self._refresh, self._training_count)
-        value = values.lookup_mapping("training.window", None)
-        values.set(value, self._sample_interval * self._sample_count)
         value = values.lookup_mapping("training.interval", None)
         values.set(value, self._training_interval)
+        value = values.lookup_mapping("training.window", None)
+        values.set(value, timewindow)
 
         print("Training interval:", self.training_interval())
         print("Sample interval:", self.sample_interval())
         print("Sample count:", self.sample_count())
-        print("Timestamp:", datetime.fromisoformat(self.timestamp()))
+        print("Timestamp:", self.timestamp_s, '-', self.timestamp)
         print("Target metric:", self.target())
         print("Filter metrics:", self.filter().split())
-        print("Start time:", self.start_time)
-        print("End time:", self.end_time)
-        print("Total: %.5f seconds" % (self.end_time - self.start_time))
+        print("Start time:", datetime.fromtimestamp(self.start_time), '-', self.start_time)
+        print("End time:", datetime.fromtimestamp(self.end_time), '-', self.end_time)
+        print("Total time: %.5f seconds" % (self.end_time - self.start_time))
+
+        if self._training_count == 1: # first time
+            reset = 'full'
+        return reset
 
     def finish(self):
         self.values.stop()
@@ -573,8 +607,8 @@ class TreetopServer():
                                                    mtype = MMV_TYPE_FLOAT)
             self.sample_count = mmv.extend_item(top + 'sampling.count',
                                                 mtype = MMV_TYPE_U32)
-            self.timestamp = mmv.extend_item(top + 'timestamp',
-                                             mtype = MMV_TYPE_STRING)
+            self.sample_time = mmv.extend_item(top + 'timestamp',
+                                             mtype = MMV_TYPE_FLOAT)
             self.target = mmv.extend_item(top + 'target',
                                           mtype = MMV_TYPE_STRING)
             self.filter = mmv.extend_item(top + 'filter',
@@ -620,7 +654,6 @@ class TreetopServer():
         return True
 
     def sleep(self):
-        self._training_interval = self.training_interval()
         print('Sleep after training', self._training_interval)
         time.sleep(self._training_interval)
 
@@ -637,10 +670,9 @@ class TreetopServer():
         print('Server refreshing')
         # refresh information from the client
         self.client.fetch()
-        self.settings()
+        reset = self.settings()
 
         # check if sample interval/count changed - full refresh
-        reset = 'full'
         # check if timestamp changed (/live?) - partial refresh
         #  reset = 'part'
         # else
@@ -652,7 +684,7 @@ class TreetopServer():
         timer = self.elapsed(timer, "sampling.elapsed_time")
         print('Dataset preparation complete in %.5fsec' % (timer))
 
-        # use self.{target,filter} to start training at self.timestamp
+        # use self.{target,filter} to start training at self.sample_time
         timer = time.time()
         ensemble, train_X, train_y, test_X, test_y = self.prepare_models()
         timer = self.elapsed(timer, "training.elapsed_time")
@@ -664,19 +696,18 @@ class TreetopServer():
     def prepare_dataset(self, reset='full'):
         # refresh from the metrics source to form a pandas dataframe
 
-        if reset == 'full' and self.df:
-            del self.df
+        if reset == 'full' and self.df is not None:
+            self.df = None
 
-        # calculate starting offset for sampling from the archive?
-        # OR: recreate the fetchgroup from scratch?
-
-        #origin = self.opts.pmGetOptionHighResStart()  # TODO: mapping
-        count = self.opts.pmGetOptionSamples()  # TODO: mapping
-        #delta = self.opts.pmGetOptionHighResInterval()   # TODO: mapping
-        #print('Origin:', origin)
-        #print('Delta:', delta)
-        #print('Count:', count)
-        #self.context.pmSetModeHighRes(PM_MODE_INTERP, origin, delta)
+        value = self.values.lookup_mapping("target.timestamp", None)
+        self.values.set(value, self.timestamp)
+        origin = pmapi.timespec(self.timestamp)
+        delta = pmapi.timespec(self.sample_interval())
+        count = self.sample_count()
+        print('Origin:', origin)
+        print('Delta:', delta)
+        print('Count:', count)
+        self.context.pmSetModeHighRes(PM_MODE_INTERP, origin, delta)
 
         while count > 0:
             count = count - 1
@@ -1219,15 +1250,22 @@ if __name__ == '__main__':
         usage.message()
         sys.exit(1)
 
-    server.refresh()
+    try:
+        server.refresh()
+    except (EOFError, KeyboardInterrupt) as err:
+        sys.exit(server.finish())
+
     while not finished:
         try:
             server.sleep()
-        except:
+        #    refresh = True
+        except StopIteration as err:
             pass
-        if not refresh:
-            continue
+        except (EOFError, KeyboardInterrupt) as err:
+            break
+        #if not refresh:
+        #    continue
         server.refresh()
-        refresh = False
+        #refresh = False
 
     sys.exit(server.finish())

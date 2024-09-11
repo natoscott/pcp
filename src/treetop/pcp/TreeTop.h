@@ -82,7 +82,7 @@ double Platform_getSamplingTime(void);
 
 char* Platform_getTargetMetric(void);
 
-char* Platform_getTargetTimestamp(void);
+double Platform_getTargetTimestamp(void);
 
 double* Platform_getTargetValueset(size_t* count, double* maximum);
 
@@ -168,5 +168,7 @@ void Platform_addDynamicScreenAvailableColumns(Panel* availableColumns, const ch
 void Platform_dynamicScreensDone(Hashtable* screens);
 
 void Platform_updateTables(Machine* host);
+
+void MMV_update(void* map, double timestamp);
 
 #endif

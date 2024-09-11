@@ -18,7 +18,6 @@ in the source distribution for its full text.
 
 /* use htop config.h values for these macros, not pcp values */
 #undef PACKAGE_URL
-#undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION

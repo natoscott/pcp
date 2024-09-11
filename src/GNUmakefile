@@ -117,7 +117,6 @@ OTHER_SUBDIRS += \
 	pmview \
 	perl \
 	python \
-	treetop \
 	procmemstat \
 	autofsd-probe \
 	telnet-probe \

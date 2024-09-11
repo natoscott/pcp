@@ -556,7 +556,7 @@ class TreetopServer():
         if self.training_interval() != self._training_interval:
             self._training_interval = self.training_interval()
         timewindow = self._sample_count * self._sample_interval
-        if self.sample_time() <= 0.0:
+        if self.sample_time() <= 0.0 or self.timestamp is None:
             self.timestamp = min(self.start_time + timewindow, self.end_time)
             reset = 'full'
         #elif self.sample_time() != self.timestamp:
@@ -1268,20 +1268,13 @@ if __name__ == '__main__':
 
     try:
         server.refresh()
+        while not finished:
+            try:
+                server.sleep()
+            except StopIteration as err:
+                pass
+            server.refresh()
     except (EOFError, KeyboardInterrupt) as err:
-        sys.exit(server.finish())
-
-    while not finished:
-        try:
-            server.sleep()
-        #    refresh = True
-        except StopIteration as err:
-            pass
-        except (EOFError, KeyboardInterrupt) as err:
-            break
-        #if not refresh:
-        #    continue
-        server.refresh()
-        #refresh = False
+        pass
 
     sys.exit(server.finish())

@@ -28,7 +28,6 @@ LCFLAGS += -DCOPYRIGHT=\"$(COPYRIGHT)\" -DPACKAGE=\"$(CMDTARGET)\"
 LCFLAGS += -D_XOPEN_SOURCE_EXTENDED -DMAJOR_IN_SYSMACROS=1 -DHTOP_PCP=1
 
 TOPCFILES = \
-	Action.c \
 	AvailableColumnsPanel.c \
 	AvailableMetersPanel.c \
 	CategoriesPanel.c \
@@ -36,7 +35,6 @@ TOPCFILES = \
 	ColorsPanel.c \
 	ColumnsPanel.c \
 	CommandLine.c \
-	CommandScreen.c \
 	Compat.c \
 	CPUMeter.c \
 	CRT.c \
@@ -46,26 +44,20 @@ TOPCFILES = \
 	DynamicColumn.c \
 	DynamicMeter.c \
 	DynamicScreen.c \
-	EnvScreen.c \
 	FunctionBar.c \
 	Hashtable.c \
 	Header.c \
 	HeaderOptionsPanel.c \
 	HostnameMeter.c \
 	IncSet.c \
-	InfoScreen.c \
 	ListItem.c \
 	Machine.c \
 	MainPanel.c \
 	Meter.c \
 	MetersPanel.c \
 	Object.c \
-	OpenFilesScreen.c \
 	OptionItem.c \
 	Panel.c \
-	Process.c \
-	ProcessLocksScreen.c \
-	ProcessTable.c \
 	RichString.c \
 	Row.c \
 	Scheduling.c \
@@ -74,23 +66,15 @@ TOPCFILES = \
 	ScreenTabsPanel.c \
 	Settings.c \
 	SignalsPanel.c \
-	SysArchMeter.c \
 	Table.c \
-	TraceScreen.c \
 	UsersTable.c \
 	Vector.c \
 	XUtils.c \
 
 SUBCFILES = \
 	linux/CGroupUtils.c \
-	pcp/InDomTable.c \
-	pcp/Instance.c \
-	pcp/PCPDynamicColumn.c \
-	pcp/PCPDynamicMeter.c \
-	pcp/PCPDynamicScreen.c \
 
 TOPHFILES = \
-	Action.h \
 	AvailableColumnsPanel.h \
 	AvailableMetersPanel.h \
 	CategoriesPanel.h \
@@ -98,7 +82,6 @@ TOPHFILES = \
 	ColorsPanel.h \
 	ColumnsPanel.h \
 	CommandLine.h \
-	CommandScreen.h \
 	Compat.h \
 	CPUMeter.h \
 	CRT.h \
@@ -108,7 +91,6 @@ TOPHFILES = \
 	DynamicColumn.h \
 	DynamicMeter.h \
 	DynamicScreen.h \
-	EnvScreen.h \
 	FunctionBar.h \
 	Hashtable.h \
 	Header.h \
@@ -116,7 +98,6 @@ TOPHFILES = \
 	HeaderOptionsPanel.h \
 	HostnameMeter.h \
 	IncSet.h \
-	InfoScreen.h \
 	ListItem.h \
 	Machine.h \
 	Macros.h \
@@ -125,12 +106,8 @@ TOPHFILES = \
 	MeterMode.h \
 	MetersPanel.h \
 	Object.h \
-	OpenFilesScreen.h \
 	OptionItem.h \
 	Panel.h \
-	Process.h \
-	ProcessLocksScreen.h \
-	ProcessTable.h \
 	ProvideCurses.h \
 	ProvideTerm.h \
 	RichString.h \
@@ -142,29 +119,25 @@ TOPHFILES = \
 	ScreenTabsPanel.h \
 	Settings.h \
 	SignalsPanel.h \
-	SysArchMeter.h \
 	Table.h \
-	TraceScreen.h \
 	UsersTable.h \
 	Vector.h \
 	XUtils.h \
 
 SUBHFILES = \
 	linux/CGroupUtils.h \
-	pcp/InDomTable.h \
-	pcp/Instance.h \
-	pcp/PCPDynamicColumn.h \
-	pcp/PCPDynamicMeter.h \
-	pcp/PCPDynamicScreen.h \
 
 TREETOPCFILES = \
 	treetop.c \
+	pcp/Action.c \
 	pcp/Metric.c \
 	pcp/TreeTop.c \
 	pcp/PCPMachine.c \
 	pcp/ConfidenceMeter.c \
 	pcp/ElapsedTimeMeter.c \
 	pcp/FeaturesMeter.c \
+	pcp/Feature.c \
+	pcp/FeatureTable.c \
 	pcp/ProcessingStateMeter.c \
 	pcp/SampleIntervalMeter.c \
 	pcp/SamplingTimeMeter.c \
@@ -173,16 +146,17 @@ TREETOPCFILES = \
 	pcp/TargetValueMeter.c \
 	pcp/TrainingTimeMeter.c \
 	pcp/TrainingWindowMeter.c \
-	pcp/TreeTopProcess.c \
-	pcp/TreeTopProcessTable.c \
 
 TREETOPHFILES = \
+	pcp/Action.h \
 	pcp/Metric.h \
 	pcp/TreeTop.h \
 	pcp/PCPMachine.h \
 	pcp/ConfidenceMeter.h \
 	pcp/ElapsedTimeMeter.h \
 	pcp/FeaturesMeter.h \
+	pcp/Feature.h \
+	pcp/FeatureTable.h \
 	pcp/ProcessingStateMeter.h \
 	pcp/SampleIntervalMeter.h \
 	pcp/SamplingTimeMeter.h \
@@ -191,8 +165,6 @@ TREETOPHFILES = \
 	pcp/TargetValueMeter.h \
 	pcp/TrainingTimeMeter.h \
 	pcp/TrainingWindowMeter.h \
-	pcp/TreeTopProcess.h \
-	pcp/TreeTopProcessTable.h \
 
 DOCFILES = AUTHORS
 

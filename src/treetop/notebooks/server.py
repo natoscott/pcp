@@ -21,7 +21,6 @@ from datetime import datetime
 from collections import OrderedDict
 
 from sklearn.ensemble import IsolationForest
-from sklearn.inspection import permutation_importance
 from sklearn.model_selection import TimeSeriesSplit, cross_validate
 from sklearn.feature_selection import VarianceThreshold, mutual_info_regression
 
@@ -35,7 +34,6 @@ from cmmv import ( MMV_SEM_INSTANT, MMV_SEM_DISCRETE, MMV_SEM_COUNTER,
                    MMV_TYPE_U32, MMV_TYPE_FLOAT, MMV_TYPE_DOUBLE,
                    MMV_TYPE_STRING, MMV_FLAG_SENTINEL )
 
-permutation_importance = False # toggle, expensive to calculate though
 try:
     import shap
     shap_explanations = True
@@ -133,7 +131,7 @@ class TreetopServer():
     """ MMV metrics for treetop server (predict+explain) utility """
 
     _exit_code = 1  # failure is the default
-    _max_features = 15  # number of feature importances reported
+    _max_features = 16  # number of feature importances reported
     _sample_count = 720  # number of samples in training set
     _sample_interval = 15  # metrics sampling interval (seconds)
     _sample_valueset = 128  # count of raw sample values exported
@@ -143,6 +141,7 @@ class TreetopServer():
     _variance_threshold = 0.125  # minimum level of feature variance
     _mutualinfo_threshold = 0.125  # minimum target mutual information
     _max_anomaly_features = 25  # maximum anomaly features engineered
+    _max_mutualinfo_features = 1001 # maximum features post MI reduction
 
     def __init__(self):
         self.client = None
@@ -212,42 +211,31 @@ class TreetopServer():
             servers results for training, predicting & explaining.
         """
         model_features, sample_valueset = [], []
-        permutation_features, shap_features = [], []
-        optmin_features, optmax_features = [], []
+        optim_features, local_features = [], []
         for instid in range(self._sample_valueset):
             instance = str(instid)
             sample_valueset.append(mmv.mmv_instance(instid, instance))
         for feature in range(self._max_features):
             instance = str(feature)
             model_features.append(mmv.mmv_instance(feature, instance))
-            permutation_features.append(mmv.mmv_instance(feature, instance))
-            shap_features.append(mmv.mmv_instance(feature, instance))
-            optmax_features.append(mmv.mmv_instance(feature, instance))
-            optmin_features.append(mmv.mmv_instance(feature, instance))
+            local_features.append(mmv.mmv_instance(feature, instance))
+            optim_features.append(mmv.mmv_instance(feature, instance))
         indoms = [mmv.mmv_indom(serial = 1,
                     shorttext = "Model-based feature importance",
                     helptext = "Set of important features found by modeling"),
                   mmv.mmv_indom(serial = 2,
-                    shorttext = "Permutation-based feature importance",
-                    helptext = "Set of important features found by permutation"),
+                    shorttext = "Sample-based feature importance",
+                    helptext = "Set of important features found for a sample (local SHAP)"),
                   mmv.mmv_indom(serial = 3,
-                    shorttext = "SHAP-based feature importance",
-                    helptext = "Set of important features found by SHAP"),
+                    shorttext = "Perturbation-based optimisation feature importance",
+                    helptext = "Set of important optimisation features found by min/max perturbation"),
                   mmv.mmv_indom(serial = 4,
-                    shorttext = "Maxima-perturbed optimisation feature importance",
-                    helptext = "Set of important optimisation features found by maxima perturbation"),
-                  mmv.mmv_indom(serial = 5,
-                    shorttext = "Minima-perturbed optimisation feature importance",
-                    helptext = "Set of important optimisation features found by minima perturbation"),
-                  mmv.mmv_indom(serial = 6,
                     shorttext = "Target metric recent sampled values"),
                  ]
         indoms[0].set_instances(model_features)
-        indoms[1].set_instances(permutation_features)
-        indoms[2].set_instances(shap_features)
-        indoms[3].set_instances(optmax_features)
-        indoms[4].set_instances(optmin_features)
-        indoms[5].set_instances(sample_valueset)
+        indoms[1].set_instances(local_features)
+        indoms[2].set_instances(optim_features)
+        indoms[3].set_instances(sample_valueset)
 
         metrics = [mmv.mmv_metric(name = "target.metric",
                               item = 0,
@@ -277,7 +265,7 @@ class TreetopServer():
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 6,
+                              indom = 4,
                               shorttext = "Target values preceding timestamp",
                               helptext = "Comma-separated values for target "
                                   "up to and including the current sample."),
@@ -370,13 +358,13 @@ class TreetopServer():
                               dimension = pmapi.pmUnits(0,0,1,0,0,PM_COUNT_ONE),
                               shorttext = "Count of features in the training set"),
                    mmv.mmv_metric(name = "explaining.model.confidence",
-                              item = 200,
+                              item = 150,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Model confidence from prediction accuracy"),
                    mmv.mmv_metric(name = "explaining.model.features",
-                              item = 201,
+                              item = 151,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
@@ -385,14 +373,14 @@ class TreetopServer():
                               helptext = "Most important features "
                                   "(metric instance name pairs, anomalies)"),
                    mmv.mmv_metric(name = "explaining.model.importance",
-                              item = 202,
+                              item = 152,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 1,
                               shorttext = "Most important feature rankings."),
                    mmv.mmv_metric(name = "explaining.model.importance_type",
-                              item = 203,
+                              item = 153,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_DISCRETE,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
@@ -400,7 +388,7 @@ class TreetopServer():
                               helptext = "XGBoost feature importance type "
                                   "(one of 'weight', 'gain' or 'cover')"),
                    mmv.mmv_metric(name = "explaining.model.mutual_information",
-                              item = 21,
+                              item = 154,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
@@ -409,124 +397,76 @@ class TreetopServer():
                               helptext = "Mutual information between each "
                                   "important feature and target variables)"),
                    mmv.mmv_metric(name = "explaining.model.elapsed_time",
-                              item = 204,
+                              item = 155,
                               typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Time for model-based explanations"),
-                   mmv.mmv_metric(name = "explaining.pfi.features",
-                              item = 205,
+                   mmv.mmv_metric(name = "explaining.local.features",
+                              item = 170,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 2,
-                              shorttext = "Most important permutation features"),
-                   mmv.mmv_metric(name = "explaining.pfi.mean",
-                              item = 206,
+                              shorttext = "Sample (local SHAP) important feature names"),
+                   mmv.mmv_metric(name = "explaining.local.importance",
+                              item = 171,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 2,
-                              shorttext = "Mean score from feature permutation"),
-                   mmv.mmv_metric(name = "explaining.pfi.std",
-                              item = 207,
+                              shorttext = "Local SHAP value, feature importance"),
+                   mmv.mmv_metric(name = "explaining.local.mutual_information",
+                              item = 172,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
                               indom = 2,
-                              shorttext = "Standard deviation from permutation"),
-                   mmv.mmv_metric(name = "explaining.pfi.mutual_information",
-                              item = 208,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 2,
-                              shorttext = "Mutual information for PFI features",
-                              helptext = "Mutual information for permutation"
-                                " feature importance (PFI) based explanation."),
-                   mmv.mmv_metric(name = "explaining.pfi.elapsed_time",
-                              item = 209,
-                              typeof = MMV_TYPE_DOUBLE,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time for permutation-based explanations"),
-                   mmv.mmv_metric(name = "explaining.shap.features",
-                              item = 210,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
-                              shorttext = "SHAP important feature names"),
-                   mmv.mmv_metric(name = "explaining.shap.value",
-                              item = 211,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
-                              shorttext = "SHAP value, feature importance"),
-                   mmv.mmv_metric(name = "explaining.shap.mutual_information",
-                              item = 212,
-                              typeof = MMV_TYPE_FLOAT,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 3,
                               shorttext = "Mutual information for SHAP importance",
                               helptext = "Mutual information for SHAP-based feature"
                                 " importance explanations (compared to target)."),
-                   mmv.mmv_metric(name = "explaining.shap.elapsed_time",
-                              item = 213,
+                   mmv.mmv_metric(name = "explaining.local.elapsed_time",
+                              item = 173,
                               typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time for SHAP-based explanations"),
-                   mmv.mmv_metric(name = "optimising.maxima.change",
-                              item = 214,
+                              shorttext = "Time for sample-based (local SHAP) explanations"),
+                   mmv.mmv_metric(name = "optimising.difference",
+                              item = 190,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 4,
-                              shorttext = "Max-perturned optimisation delta"),
-                   mmv.mmv_metric(name = "optimising.maxima.direction",
-                              item = 215,
+                              indom = 3,
+                              shorttext = "Perturbation optimisation value difference"),
+                   mmv.mmv_metric(name = "optimising.min_max",
+                              item = 191,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 4,
-                              shorttext = "Max-perturbed optimisation feature change direction"),
-                   mmv.mmv_metric(name = "optimising.maxima.features",
-                              item = 216,
+                              indom = 3,
+                              shorttext = "Perturbation optimisation method (min/max)"),
+                   mmv.mmv_metric(name = "optimising.features",
+                              item = 192,
                               typeof = MMV_TYPE_STRING,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 4,
-                              shorttext = "Max-perturbed optimisation feature names"),
-                   mmv.mmv_metric(name = "optimising.minima.change",
-                              item = 217,
+                              indom = 3,
+                              shorttext = "Perturbation optimisation feature names"),
+                   mmv.mmv_metric(name = "optimising.mutual_information",
+                              item = 193,
                               typeof = MMV_TYPE_FLOAT,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
-                              shorttext = "Min-perturbed optimisation delta"),
-                   mmv.mmv_metric(name = "optimising.minima.direction",
-                              item = 218,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
-                              shorttext = "Min-perturbed optimisation feature change direction"),
-                   mmv.mmv_metric(name = "optimising.minima.features",
-                              item = 219,
-                              typeof = MMV_TYPE_STRING,
-                              semantics = MMV_SEM_INSTANT,
-                              dimension = pmapi.pmUnits(0,0,0,0,0,0),
-                              indom = 5,
-                              shorttext = "Min-perturbed optimisation feature names"),
+                              indom = 3,
+                              shorttext = "Mutual information for optimisation features",
+                              helptext = "Mutual information for optimisation feature"
+                                " importance explanations (compared to target)."),
                    mmv.mmv_metric(name = "optimising.elapsed_time",
-                              item = 220,
+                              item = 194,
                               typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
-                              shorttext = "Time for permutation-based optimisation explanation"),
+                              shorttext = "Time for permutation optimisation explanations"),
                   ]
 
         values = mmv.MemoryMappedValues("treetop.server",
@@ -890,7 +830,8 @@ class TreetopServer():
 
         # calculate all features mutual information with the target variable
         t0 = time.time()
-        mi = mutual_info_regression(clean_X, clean_y)
+        # TODO: scikit-learn 1.5+ adds optional n_jobs[=-1] parameter here:
+        mi = mutual_info_regression(clean_X, clean_y, discrete_features=False)
         mi /= np.max(mi)  # normalise based on largest value observed
         t1 = time.time()
         print('MutualInformation time:', t1 - t0)
@@ -901,15 +842,26 @@ class TreetopServer():
         self.mutualinfo = pd.DataFrame(data=results, dtype='float64')
 
         cull = mi <= self._mutualinfo_threshold
-        keep = (mi > self._mutualinfo_threshold).sum()
-        cols = train_X.shape[1]
-        print('Keeping', keep, 'of', cols, 'columns with mutual information')
-        value = self.values.lookup_mapping("features.mutual_information", None)
-        self.values.set(value, keep)
-
         indices = np.where(cull)
+        drop_columns = clean_X.columns[indices]
+
+        keeping = clean_X.shape[1] - len(drop_columns)
+        print('Keeping', keeping, 'columns with MutualInformation')
+        if len(drop_columns) > self._max_mutualinfo_features:
+            # still too many so reduce using argsort to prioritize -
+            # caps the number of features after mutual information;
+            # argsort arranges values from smallest to largest MI.
+            upuntil = mi.shape[0] - self._max_mutualinfo_features
+            indices = mi.argsort()[0:upuntil]
+            print('Limit', upuntil, 'columns with MutualInformation')
+
         clean_X = clean_X.drop(clean_X.columns[indices], axis=1)
-        return train_X[clean_X.columns]  # undo NaN->0
+        train_X = train_X[clean_X.columns]  # undo NaN->0
+        print('MutualInformation shape:', train_X.shape)
+
+        value = self.values.lookup_mapping("features.mutual_information", None)
+        self.values.set(value, train_X.shape[1])
+        return train_X
 
     def prepare_split(self, target, notrain, splits=5, verbose=0):
         targets = [target]
@@ -1013,50 +965,66 @@ class TreetopServer():
 
         return model, train_X, train_y, test_X, test_y
 
-    def optimise_export(self, df_inc, df_dec, test_X, column, name):
+    def optimise_update(self, count, df, column, i):
+        inst = str(count)
+        feature = df.iloc[i]['feature']
+        difference = df.iloc[i][column]
+        if difference == 0:
+            return False
         v = self.values
+        value = v.lookup_mapping("optimising.features", inst)
+        v.set_string(value, metricspec(feature))
+        value = v.lookup_mapping("optimising.difference", inst)
+        v.set(value, difference)
+        value = v.lookup_mapping("optimising.min_max", inst)
+        v.set_string(value, column)
+        value = v.lookup_mapping("optimising.mutual_information", inst)
+        v.set(value, self.mutualinfo[feature].item())
+        return True
+
+    def optimise_export(self, max_inc, max_dec, min_inc, min_dec, test_X):
+        quarter = int(self._max_features / 4)
         count = 0
-        # increasing changes in prediction
-        #print(name, 'based increases', df_inc)
-        for i in df_inc[column].argsort()[::-1]:
-            inst = str(count)
-            change = df_inc.iloc[i][column]
-            if change == 0: change = self.NaN
-            feature = df_inc.iloc[i]['feature']
-            value = v.lookup_mapping("optimising." + name + ".features", inst)
-            v.set_string(value, metricspec(feature))
-            value = v.lookup_mapping("optimising." + name + ".change", inst)
-            v.set(value, change)
-            value = v.lookup_mapping("optimising." + name + ".direction", inst)
-            v.set_string(value, "increase")
-            if count >= int(self._max_features / 2): # first half increasing
+        # increasing changes in max-based prediction
+        for i in max_inc['maximum'].argsort()[::-1]:
+            if not self.optimise_update(count, max_inc, 'maximum', i):
+                break
+            if count >= quarter: # up to 1st quarter: max-based, increasing
                 break
             count += 1
-        # decreasing changes in prediction
-        #print(name, 'based decreases', df_dec)
-        for i in df_dec[column].argsort():
-            inst = str(count)
-            change = df_dec.iloc[i][column]
-            if change == 0: change = self.NaN
-            feature = df_dec.iloc[i]['feature']
-            value = v.lookup_mapping("optimising." + name + ".features", inst)
-            v.set_string(value, metricspec(feature))
-            value = v.lookup_mapping("optimising." + name + ".change", inst)
-            v.set(value, change)
-            value = v.lookup_mapping("optimising." + name + ".direction", inst)
-            v.set_string(value, "decrease")
-            if count >= self._max_features: # remainder decreasing
+        # decreasing changes in max-based prediction
+        for i in max_dec['maximum'].argsort():
+            if not self.optimise_update(count, max_dec, 'maximum', i):
+                break
+            if count >= quarter * 2: # up to half: max-based, decreasing
                 break
             count += 1
-        while count < self._max_features:  # clear any remaining instances
+        # increasing changes in min-based prediction
+        for i in min_inc['minimum'].argsort()[::-1]:
+            if not self.optimise_update(count, min_inc, 'minimum', i):
+                break
+            if count >= quarter * 3: # up to 3rd quarter: min-based, increasing
+                break
+            count += 1
+        # decreasing changes in min-based prediction
+        for i in min_dec['minimum'].argsort():
+            if not self.optimise_update(count, min_dec, 'minimum', i):
+                break
+            if count >= self._max_features: # up to end: min-based, decreasing
+                break
+            count += 1
+        # clear out any remaining instance slots
+        while count < self._max_features:
             inst = str(count)
-            value = v.lookup_mapping("optimising." + name + ".features", inst)
+            value = v.lookup_mapping("optimising.features", inst)
             v.set_string(value, '')
-            value = v.lookup_mapping("optimising." + name + ".change", inst)
+            value = v.lookup_mapping("optimising.difference", inst)
             v.set(value, self.NaN)
-            value = v.lookup_mapping("optimising." + name + ".direction", inst)
+            value = v.lookup_mapping("optimising.min_max", inst)
             v.set_string(value, '')
-            count = count + 1
+            value = v.lookup_mapping("optimising.mutual_information", inst)
+            v.set(value, self.NaN)
+            count += 1
 
     def optimise(self, model, train_X, train_y, test_X, test_y):
         print('Calculating optimisation importance')
@@ -1084,8 +1052,7 @@ class TreetopServer():
         min_inc = perturbed[perturbed.minimum > predict]
         min_dec = perturbed[perturbed.minimum < predict]
 
-        self.optimise_export(max_inc, max_dec, test_X, 'maximum', 'maxima')
-        self.optimise_export(min_inc, min_dec, test_X, 'minimum', 'minima')
+        self.optimise_export(max_inc, max_dec, min_inc, min_dec, test_X)
 
         timer = self.elapsed(timer, "optimising.elapsed_time")
         print('Finished optimisation importance in %.5f seconds' % (timer))
@@ -1144,7 +1111,7 @@ class TreetopServer():
             v.set(value, self.NaN)
             i = i + 1
 
-    def shap_importance(self, model, train_X, test_X):
+    def local_importance(self, model, train_X, test_X):
         if not shap_explanations:
             print('Skipping SHAP importance')
             return
@@ -1165,73 +1132,30 @@ class TreetopServer():
             else:
                 mutual = self.mutualinfo[name].item()
                 iname = metricspec(name)
-            value = v.lookup_mapping("explaining.shap.features", inst)
+            value = v.lookup_mapping("explaining.local.features", inst)
             v.set_string(value, iname)
-            value = v.lookup_mapping("explaining.shap.value", inst)
+            value = v.lookup_mapping("explaining.local.importance", inst)
             v.set(value, shapv)
-            value = v.lookup_mapping("explaining.shap.mutual_information", inst)
+            value = v.lookup_mapping("explaining.local.mutual_information", inst)
             v.set(value, mutual)
             if count >= self._max_features:
                 break
             count += 1
-        timer = self.elapsed(timer, "explaining.shap.elapsed_time")
+        timer = self.elapsed(timer, "explaining.local.elapsed_time")
         print('Finished SHAP importance in %.5f seconds [%d]' % (timer, count))
         while count < self._max_features:  # clear any remaining instances
             inst = str(count)
-            value = v.lookup_mapping("explaining.shap.features", inst)
+            value = v.lookup_mapping("explaining.local.features", inst)
             v.set_string(value, '')
-            value = v.lookup_mapping("explaining.shap.value", inst)
+            value = v.lookup_mapping("explaining.local.importance", inst)
             v.set(value, self.NaN)
-            value = v.lookup_mapping("explaining.shap.mutual_information", inst)
-            v.set(value, self.NaN)
-            count = count + 1
-
-    def permutation_feature_importance(self, model, train_X, train_y):
-        if not permutation_importance:
-            print('Skipped permutation importance')
-            return
-        v = self.values
-        timer = time.time()
-        print('Calculating permutation importance')
-        # Importance from permutation information measure
-        pfi = permutation_importance(model, train_X, train_y, n_repeats=3,
-                                     max_samples=0.5, n_jobs=-1)
-        count = 0
-        for i in pfi.importances_mean.argsort()[::-1]:
-            if pfi.importances_mean[i] - 2 * pfi.importances_std[i] <= 0:
-                continue
-            inst = str(count)
-            name = train_X.columns[i]
-            pfi_mean = pfi.importances_mean[i]
-            pfi_std = pfi.importances_std[i]
-            value = v.lookup_mapping("explaining.pfi.features", inst)
-            v.set_string(value, metricspec(name))
-            value = v.lookup_mapping("explaining.pfi.mean", inst)
-            v.set(value, pfi_mean)
-            value = v.lookup_mapping("explaining.pfi.std", inst)
-            v.set(value, pfi_std)
-            value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
-            v.set(value, self.mutualinfo[name].item())
-            if count >= self._max_features:
-                break
-            count += 1
-        timer = self.elapsed(timer, "explaining.pfi.elapsed_time")
-        print('Finished permutation importance in %.5f seconds' % (timer))
-        while count < self._max_features:  # clear any remaining instances
-            inst = str(count)
-            value = v.lookup_mapping("explaining.pfi.features", inst)
-            v.set_string(value, '')
-            value = v.lookup_mapping("explaining.pfi.mean", inst)
-            v.set(value, self.NaN)
-            value = v.lookup_mapping("explaining.pfi.std", inst)
-            v.set(value, self.NaN)
-            value = v.lookup_mapping("explaining.pfi.mutual_information", inst)
+            value = v.lookup_mapping("explaining.local.mutual_information", inst)
             v.set(value, self.NaN)
             count = count + 1
 
     def explain_models(self, model, train_X, train_y, test_X, test_y):
-        """ Generate feature importance measures and update metrics. """
-        """ Perform feature permutation assessment and update metrics. """
+        """ Generate global and local feature importance measures,  """
+        """ permutation optimisation assessment and update metrics. """
 
         # Firstly, calculate and export a confidence level for the model
         self.confidence_level(model, self.target(), test_X, test_y)
@@ -1239,14 +1163,11 @@ class TreetopServer():
         # Model feature importance measures
         self.model_importance(model)
 
+        # Importance from local SHAP values
+        self.local_importance(model, train_X, test_X)
+
         # Importance from optimisation measures
         self.optimise(model, train_X, train_y, test_X, test_y)
-
-        # Importance from SHAP values
-        self.shap_importance(model, train_X, test_X)
-
-        # Permutation Feature Importance measure
-        self.permutation_feature_importance(model, train_X, train_y)
 
 if __name__ == '__main__':
 

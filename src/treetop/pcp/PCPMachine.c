@@ -70,8 +70,3 @@ void Machine_delete(Machine* super) {
    free(this->values);
    free(this);
 }
-
-bool Machine_isCPUonline(const Machine* host, unsigned int id) {
-   (void) host; (void) id;
-   return true;
-}

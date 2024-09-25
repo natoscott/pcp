@@ -45,17 +45,16 @@ typedef enum Metric_ {
    PCP_IMPORTANCE_TYPE,		/* treetop.server.explaining.model.importance_type */
    PCP_MODEL_MUTUALINFO,	/* treetop.server.explaining.model.mutual_information */
    PCP_MODEL_ELAPSED,		/* treetop.server.explaining.model.elapsed_time */
-   PCP_SHAP_FEATURES,		/* treetop.server.explaining.shap.features */
-   PCP_SHAP_VALUES,		/* treetop.server.explaining.shap.values */
-   PCP_SHAP_MUTUALINFO,		/* treetop.server.explaining.shap.mutual_information */
-   PCP_SHAP_ELAPSED,		/* treetop.server.explaining.shap.elapsed_time */
-   PCP_OPTMAX_CHANGE,		/* treetop.server.optimising.maxima.change */
-   PCP_OPTMAX_DIRECTION,	/* treetop.server.optimising.maxima.direction */
-   PCP_OPTMAX_FEATURES,		/* treetop.server.optimising.maxima.features */
-   PCP_OPTMIN_CHANGE,		/* treetop.server.optimising.minima.change */
-   PCP_OPTMIN_DIRECTION,	/* treetop.server.optimising.minima.direction */
-   PCP_OPTMIN_FEATURES,		/* treetop.server.optimising.minima.features */
-   PCP_OPTIMA_ELAPSED,		/* treetop.server.optimising.elapsed_time */
+   PCP_LOCAL_FEATURES,		/* treetop.server.explaining.local.features */
+   PCP_LOCAL_IMPORTANCE,	/* treetop.server.explaining.local.importance */
+   PCP_LOCAL_MUTUALINFO,	/* treetop.server.explaining.local.mutual_information */
+   PCP_LOCAL_ELAPSED,		/* treetop.server.explaining.shap.elapsed_time */
+   PCP_OPTIM_FEATURES,		/* treetop.server.optimising.features */
+   PCP_OPTIM_INC_DEC,		/* treetop.server.optimising.inc_dec */
+   PCP_OPTIM_MIN_MAX,		/* treetop.server.optimising.min_max */
+   PCP_OPTIM_DIFFERENCE,	/* treetop.server.optimising.difference */
+   PCP_OPTIM_MUTUALINFO,	/* treetop.server.optimising.mutual_information */
+   PCP_OPTIM_ELAPSED,		/* treetop.server.optimising.elapsed_time */
 
    PCP_METRIC_COUNT             /* total metric count */
 } Metric;

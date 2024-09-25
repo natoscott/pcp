@@ -26,43 +26,44 @@ in the source distribution for its full text.
 #include "HostnameMeter.h"
 #include "Macros.h"
 #include "Meter.h"
-#include "ProcessTable.h"
 #include "Settings.h"
-#include "SysArchMeter.h"
 #include "XUtils.h"
 
-#include "ConfidenceMeter.h"
-#include "ElapsedTimeMeter.h"
-#include "FeaturesMeter.h"
-#include "ProcessingStateMeter.h"
-#include "SampleIntervalMeter.h"
-#include "SamplingTimeMeter.h"
-#include "TargetMetricMeter.h"
-#include "TargetTimestampMeter.h"
-#include "TargetValueMeter.h"
-#include "TrainingTimeMeter.h"
-#include "TrainingWindowMeter.h"
-
+#include "pcp/ConfidenceMeter.h"
+#include "pcp/ElapsedTimeMeter.h"
+#include "pcp/FeaturesMeter.h"
 #include "pcp/Metric.h"
-#include "pcp/PCPDynamicColumn.h"
-#include "pcp/PCPDynamicMeter.h"
-#include "pcp/PCPDynamicScreen.h"
 #include "pcp/PCPMachine.h"
-#include "pcp/TreeTopProcessTable.h"
+#include "pcp/ProcessingStateMeter.h"
+#include "pcp/SampleIntervalMeter.h"
+#include "pcp/SamplingTimeMeter.h"
+#include "pcp/TargetMetricMeter.h"
+#include "pcp/TargetTimestampMeter.h"
+#include "pcp/TargetValueMeter.h"
+#include "pcp/TrainingTimeMeter.h"
+#include "pcp/TrainingWindowMeter.h"
 
 
 Platform* pcp;
 
 const ScreenDefaults Platform_defaultScreens[] = {
-  { .name = "Model feature importance",
-    .columns = "FEATURE IMPORTANCE MUTUALINFO",
+  { .name = "Model importance",
+    .columns = "MODEL_FEATURE MODEL_IMPORTANCE MODEL_MUTUALINFO",
+    .sortKey = "MODEL_IMPORTANCE",
+  },
+  { .name = "Sample importance",
+    .columns = "LOCAL_FEATURE LOCAL_IMPORTANCE LOCAL_MUTUALINFO",
+    .sortKey = "LOCAL_IMPORTANCE",
+  },
+  { .name = "Optimum importance",
+    .columns = "OPTIM_FEATURE OPTIM_MIN_MAX OPTIM_DELTA OPTIM_MUTUALINFO",
   },
 };
 
 const unsigned int Platform_numberOfDefaultScreens = ARRAYSIZE(Platform_defaultScreens);
 
 const SignalItem Platform_signals[] = {
-   { .name = " 0 Cancel",    .number = 0 },
+   { .name = " 0 Cancel", .number = 0 },
 };
 
 const unsigned int Platform_numberOfSignals = ARRAYSIZE(Platform_signals);
@@ -84,7 +85,6 @@ const MeterClass* const Platform_meterTypes[] = {
    &DateMeter_class,
    &DateTimeMeter_class,
    &HostnameMeter_class,
-   &SysArchMeter_class,
    NULL
 };
 
@@ -113,17 +113,16 @@ static const char* Platform_metricNames[] = {
    [PCP_MODEL_MUTUALINFO] = "mmv.treetop.server.explaining.model.mutual_information",
    [PCP_MODEL_FEATURES] = "mmv.treetop.server.explaining.model.features",
    [PCP_MODEL_ELAPSED] = "mmv.treetop.server.explaining.model.elapsed_time",
-   [PCP_SHAP_FEATURES] = "mmv.treetop.server.explaining.shap.features",
-   [PCP_SHAP_VALUES] = "mmv.treetop.server.explaining.shap.values",
-   [PCP_SHAP_MUTUALINFO] = "mmv.treetop.server.explaining.shap.mutual_information",
-   [PCP_SHAP_ELAPSED] = "mmv.treetop.server.explaining.shap.elapsed_time",
-   [PCP_OPTMAX_CHANGE] = "mmv.treetop.server.optimising.maxima.change",
-   [PCP_OPTMAX_DIRECTION] = "mmv.treetop.server.optimising.maxima.direction",
-   [PCP_OPTMAX_FEATURES] = "mmv.treetop.server.optimising.maxima.features",
-   [PCP_OPTMIN_CHANGE] = "mmv.treetop.server.optimising.minima.change",
-   [PCP_OPTMIN_DIRECTION] = "mmv.treetop.server.optimising.minima.direction",
-   [PCP_OPTMIN_FEATURES] = "mmv.treetop.server.optimising.minima.features",
-   [PCP_OPTIMA_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
+   [PCP_LOCAL_FEATURES] = "mmv.treetop.server.explaining.local.features",
+   [PCP_LOCAL_IMPORTANCE] = "mmv.treetop.server.explaining.local.importance",
+   [PCP_LOCAL_MUTUALINFO] = "mmv.treetop.server.explaining.local.mutual_information",
+   [PCP_LOCAL_ELAPSED] = "mmv.treetop.server.explaining.local.elapsed_time",
+   [PCP_OPTIM_FEATURES] = "mmv.treetop.server.optimising.features",
+   [PCP_OPTIM_MIN_MAX] = "mmv.treetop.server.optimising.min_max",
+   [PCP_OPTIM_INC_DEC] = "mmv.treetop.server.optimising.inc_dec",
+   [PCP_OPTIM_DIFFERENCE] = "mmv.treetop.server.optimising.difference",
+   [PCP_OPTIM_MUTUALINFO] = "mmv.treetop.server.optimising.mutual_infomation",
+   [PCP_OPTIM_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
 
    [PCP_METRIC_COUNT] = NULL
 };
@@ -241,13 +240,6 @@ bool Platform_init(void) {
 
    for (size_t i = 0; i < PCP_METRIC_COUNT; i++)
       Platform_addMetric(i, Platform_metricNames[i]);
-   pcp->meters.offset = PCP_METRIC_COUNT;
-
-   PCPDynamicMeters_init(&pcp->meters);
-
-   pcp->columns.offset = PCP_METRIC_COUNT + pcp->meters.cursor;
-   PCPDynamicColumns_init(&pcp->columns);
-   PCPDynamicScreens_init(&pcp->screens, &pcp->columns);
 
    sts = pmLookupName(pcp->totalMetrics, pcp->names, pcp->pmids);
    if (sts < 0) {
@@ -269,27 +261,21 @@ bool Platform_init(void) {
    /* extract values needed for default setup */
    for (size_t i = 0; i < PCP_METRIC_COUNT; i++)
       Metric_enable(i, true);
-
-   /* enable metrics for all dynamic columns and dynamic screens */
-   size_t total = pcp->columns.offset + pcp->columns.count;
-   for (size_t i = pcp->columns.offset; i < total; i++)
-      Metric_enable(i, true);
-
    Metric_fetch(NULL);
 
    return true;
 }
 
 void Platform_dynamicColumnsDone(Hashtable* columns) {
-   PCPDynamicColumns_done(columns);
+   (void)columns;
 }
 
 void Platform_dynamicMetersDone(Hashtable* meters) {
-   PCPDynamicMeters_done(meters);
+   (void)meters;
 }
 
 void Platform_dynamicScreensDone(Hashtable* screens) {
-   PCPDynamicScreens_done(screens);
+   (void)screens;
 }
 
 void Platform_done(void) {
@@ -297,7 +283,6 @@ void Platform_done(void) {
    pmDestroyContext(pcp->context);
    if (pcp->result)
       pmFreeResult(pcp->result);
-   free(pcp->release);
    free(pcp->fetch);
    free(pcp->pmids);
    free(pcp->names);
@@ -351,10 +336,10 @@ int Platform_getElapsedTimes(double* values, int count) {
    Metric_values(PCP_MODEL_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
    values[i++] = value.d;
    if (i == count) return i;
-   Metric_values(PCP_SHAP_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
+   Metric_values(PCP_LOCAL_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
    values[i++] = value.d;
    if (i == count) return i;
-   Metric_values(PCP_OPTIMA_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
+   Metric_values(PCP_OPTIM_ELAPSED, &value, 1, PM_TYPE_DOUBLE);
    values[i++] = value.d;
    return i;
 }
@@ -445,25 +430,9 @@ double* Platform_getTargetValueset(size_t *count, double* maximum) {
    return values;
 }
 
-#if 0
-int Platform_getUptime(void) {
-   return 0;
-}
-
-unsigned int Platform_getMaxCPU(void) {
-   return 1;
-}
-#endif
-
 pid_t Platform_getMaxPid(void) {
    return INT_MAX;
 }
-
-#if 0
-long long Platform_getBootTime(void) {
-   return 0;
-}
-#endif
 
 double Platform_setCPUValues(Meter* this, int cpu) {
    (void)this; (void)cpu;
@@ -477,16 +446,6 @@ void Platform_getHostname(char* buffer, size_t size) {
 
 void Platform_getRelease(char** string) {
    *string = NULL;
-}
-
-char* Platform_getProcessEnv(pid_t pid) {
-   (void)pid;
-   return NULL;
-}
-
-FileLocks_ProcessData* Platform_getProcessLocks(pid_t pid) {
-   (void)pid;
-   return NULL;
 }
 
 void Platform_longOptionsUsage(ATTR_UNUSED const char* name) {
@@ -556,73 +515,60 @@ void Platform_gettime_monotonic(uint64_t* msec) {
 }
 
 Hashtable* Platform_dynamicMeters(void) {
-   return pcp->meters.table;
+   return NULL;
 }
 
 void Platform_dynamicMeterInit(Meter* meter) {
-   PCPDynamicMeter* this = Hashtable_get(pcp->meters.table, meter->param);
-   if (this)
-      PCPDynamicMeter_enable(this);
+   (void) meter;
 }
 
 void Platform_dynamicMeterUpdateValues(Meter* meter) {
-   PCPDynamicMeter* this = Hashtable_get(pcp->meters.table, meter->param);
-   if (this)
-      PCPDynamicMeter_updateValues(this, meter);
+   (void) meter;
 }
 
 void Platform_dynamicMeterDisplay(const Meter* meter, RichString* out) {
-   PCPDynamicMeter* this = Hashtable_get(pcp->meters.table, meter->param);
-   if (this)
-      PCPDynamicMeter_display(this, meter, out);
+   (void) meter; (void) out;
 }
 
 Hashtable* Platform_dynamicColumns(void) {
-   return pcp->columns.table;
+   return NULL;
 }
 
 const char* Platform_dynamicColumnName(unsigned int key) {
-   PCPDynamicColumn* this = Hashtable_get(pcp->columns.table, key);
-   if (this) {
-      Metric_enable(this->id, true);
-      if (this->super.caption)
-         return this->super.caption;
-      if (this->super.heading)
-         return this->super.heading;
-      return this->super.name;
-   }
    return NULL;
 }
 
 bool Platform_dynamicColumnWriteField(const Process* proc, RichString* str, unsigned int key) {
-   PCPDynamicColumn* this = Hashtable_get(pcp->columns.table, key);
-   if (this) {
-      PCPDynamicColumn_writeField(this, proc, str);
-      return true;
-   }
+   (void) proc; (void) str; (void) key;
    return false;
 }
 
 Hashtable* Platform_dynamicScreens(void) {
-   return pcp->screens.table;
+   return NULL;
 }
 
 void Platform_defaultDynamicScreens(Settings* settings) {
-   PCPDynamicScreen_appendScreens(&pcp->screens, settings);
+   (void) settings;
 }
 
 void Platform_addDynamicScreen(ScreenSettings* ss) {
-   PCPDynamicScreen_addDynamicScreen(&pcp->screens, ss);
+   (void) ss;
 }
 
 void Platform_addDynamicScreenAvailableColumns(Panel* availableColumns, const char* screen) {
-   Hashtable* screens = pcp->screens.table;
-   PCPDynamicScreens_addAvailableColumns(availableColumns, screens, screen);
+   (void) availableColumns;
+   (void) screen;
+}
+
+ProcessTable* ProcessTable_new(Machine* host, Hashtable* idMatchList) {
+   (void)idMatchList;
+   pcp->model_features = FeatureTable_new(host);
+   return (ProcessTable*) pcp->model_features;
 }
 
 void Platform_updateTables(Machine* host) {
-   PCPDynamicScreen_appendTables(&pcp->screens, host);
-   PCPDynamicColumns_setupWidths(&pcp->columns);
+   pcp->local_features = FeatureTable_new(host);
+   pcp->optim_features = FeatureTable_new(host);
 }
 
 void Platform_updateMap(void) {

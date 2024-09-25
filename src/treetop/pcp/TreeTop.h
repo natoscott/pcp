@@ -26,16 +26,15 @@ in the source distribution for its full text.
 #include "Action.h"
 #include "Hashtable.h"
 #include "Meter.h"
-#include "Process.h"
-#include "ProcessLocksScreen.h"
 #include "RichString.h"
 #include "SignalsPanel.h"
 #include "CommandLine.h"
 
+#include "pcp/Feature.h"
+#include "pcp/FeatureTable.h"
 #include "pcp/Metric.h"
-#include "pcp/PCPDynamicColumn.h"
-#include "pcp/PCPDynamicMeter.h"
-#include "pcp/PCPDynamicScreen.h"
+#include "pcp/Process.h"
+#include "pcp/ProcessTable.h"
 
 
 typedef struct Platform_ {
@@ -46,14 +45,12 @@ typedef struct Platform_ {
    pmID* fetch;               /* enabled identifiers for sampling */
    pmDesc* descs;             /* metric desc array indexed by Metric */
    pmResult* result;          /* sample values result indexed by Metric */
-   PCPDynamicMeters meters;   /* dynamic meters via configuration files */
-   PCPDynamicColumns columns; /* dynamic columns via configuration files */
-   PCPDynamicScreens screens; /* dynamic screens via configuration files */
    struct timeval offset;     /* time offset used in archive mode only */
-   char* release;             /* uname and distro from this context */
-   int pidmax;                /* maximum platform process identifier */
-   unsigned int ncpu;         /* maximum processor count configured */
+
    void* map;                 /* mapped memory for server communication */
+   FeatureTable* model_features;     /* important metrics from the ML model */
+   FeatureTable* local_features;     /* important SHAP metrics from sample */
+   FeatureTable* optim_features;     /* important metrics for optimising */
 } Platform;
 
 extern const ScreenDefaults Platform_defaultScreens[];
@@ -110,8 +107,6 @@ double Platform_setCPUValues(Meter* this, int cpu);
 
 char* Platform_getProcessEnv(pid_t pid);
 
-FileLocks_ProcessData* Platform_getProcessLocks(pid_t pid);
-
 void Platform_getPressureStall(const char* file, bool some, double* ten, double* sixty, double* threehundred);
 
 void Platform_getHostname(char* buffer, size_t size);
@@ -140,6 +135,8 @@ size_t Platform_addMetric(Metric id, const char* name);
 void Platform_gettime_realtime(struct timeval* tv, uint64_t* msec);
 
 void Platform_gettime_monotonic(uint64_t* msec);
+
+ProcessTable* ProcessTable_new(Machine* host, Hashtable* idMatchList);
 
 Hashtable* Platform_dynamicMeters(void);
 

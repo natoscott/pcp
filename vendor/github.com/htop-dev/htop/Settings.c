@@ -315,7 +315,7 @@ ScreenSettings* Settings_newScreen(Settings* this, const ScreenDefaults* default
    *ss = (ScreenSettings) {
       .heading = xStrdup(defaults->name),
       .dynamic = NULL,
-      .table = NULL,
+      .table = Platform_getTable(defaults->name),
       .fields = xCalloc(LAST_PROCESSFIELD, sizeof(ProcessField)),
       .flags = 0,
       .direction = sortDesc ? -1 : 1,

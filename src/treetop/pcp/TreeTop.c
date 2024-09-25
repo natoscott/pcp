@@ -119,7 +119,6 @@ static const char* Platform_metricNames[] = {
    [PCP_LOCAL_ELAPSED] = "mmv.treetop.server.explaining.local.elapsed_time",
    [PCP_OPTIM_FEATURES] = "mmv.treetop.server.optimising.features",
    [PCP_OPTIM_MIN_MAX] = "mmv.treetop.server.optimising.min_max",
-   [PCP_OPTIM_INC_DEC] = "mmv.treetop.server.optimising.inc_dec",
    [PCP_OPTIM_DIFFERENCE] = "mmv.treetop.server.optimising.difference",
    [PCP_OPTIM_MUTUALINFO] = "mmv.treetop.server.optimising.mutual_infomation",
    [PCP_OPTIM_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
@@ -444,10 +443,6 @@ void Platform_getHostname(char* buffer, size_t size) {
    String_safeStrncpy(buffer, hostname, size);
 }
 
-void Platform_getRelease(char** string) {
-   *string = NULL;
-}
-
 void Platform_longOptionsUsage(ATTR_UNUSED const char* name) {
    printf(
 "   --host=HOSTSPEC              metrics source is PMCD at HOSTSPEC [see PCPIntro(1)]\n"
@@ -562,13 +557,27 @@ void Platform_addDynamicScreenAvailableColumns(Panel* availableColumns, const ch
 
 ProcessTable* ProcessTable_new(Machine* host, Hashtable* idMatchList) {
    (void)idMatchList;
-   pcp->model_features = FeatureTable_new(host);
+   pcp->model_features = FeatureTable_new(host, TABLE_MODEL_IMPORTANCE);
    return (ProcessTable*) pcp->model_features;
 }
 
 void Platform_updateTables(Machine* host) {
-   pcp->local_features = FeatureTable_new(host);
-   pcp->optim_features = FeatureTable_new(host);
+   pcp->local_features = FeatureTable_new(host, TABLE_LOCAL_IMPORTANCE);
+   pcp->optim_features = FeatureTable_new(host, TABLE_OPTIM_IMPORTANCE);
+}
+
+Table* Platform_getTable(const char* name) {
+   for (unsigned int i = 0; i < Platform_numberOfDefaultScreens; i++) {
+      if (!String_eq(name, Platform_defaultScreens[i].name))
+         continue;
+      if (i == TABLE_LOCAL_IMPORTANCE)
+         return &pcp->local_features->super;
+      if (i == TABLE_OPTIM_IMPORTANCE)
+         return &pcp->optim_features->super;
+      break;
+   }
+   /* default: TABLE_MODEL_IMPORTANCE */
+   return &pcp->model_features->super;
 }
 
 void Platform_updateMap(void) {

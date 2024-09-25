@@ -105,13 +105,9 @@ pid_t Platform_getMaxPid(void);
 
 double Platform_setCPUValues(Meter* this, int cpu);
 
-char* Platform_getProcessEnv(pid_t pid);
-
-void Platform_getPressureStall(const char* file, bool some, double* ten, double* sixty, double* threehundred);
-
 void Platform_getHostname(char* buffer, size_t size);
 
-void Platform_getRelease(char** string);
+Table* Platform_getTable(const char* name);
 
 enum {
    PLATFORM_LONGOPT_HOST = 128,

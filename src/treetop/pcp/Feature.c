@@ -29,12 +29,10 @@ const FeatureFieldData Feature_fields[] = {
    [LOCAL_FEATURE] = { .name = "LOCAL_FEATURE", .title = "                                      Important Metrics ", .description = "Most important metrics (features) from local SHAP" },
    [LOCAL_IMPORTANCE] = { .name = "LOCAL_IMPORTANCE", .title = "SHAP VALUE ", .description = "SHAP value importance measure" },
    [LOCAL_MUTUALINFO] = { .name = "LOCAL_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information for high SHAP value features" },
-   [OPTMIN_FEATURE] = { .name = "OPTMIN_FEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
-   [OPTMIN_CHANGE] = { .name = "OPTMIN_CHANGE", .title = "DELTA ", .description = "Change in prediction with minima perturbations" },
-   [OPTMIN_DIRECTION] = { .name = "OPTMIN_DIRECTION", .title = "DIRECTION", .description = "Direction of change with minima perturbations" },
-   [OPTMAX_FEATURE] = { .name = "OPTMAXFEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on maxima perturbations" },
-   [OPTMAX_CHANGE] = { .name = "OPTMAX_CHANGE", .title = "DELTA ", .description = "Change in prediction with maxima perturbations" },
-   [OPTMAX_DIRECTION] = { .name = "OPTMAX_DIRECTION", .title = "DIRECTION", .description = "Direction of change with maxima perturbations" },
+   [OPTIM_FEATURE] = { .name = "OPTMIN_FEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
+   [OPTIM_MIN_MAX] = { .name = "OPTIM_MIN_MAX", .title = "MIN/MAX", .description = "Used minimum or maximum for perturbation" },
+   [OPTIM_DIFFERENCE] = { .name = "OPTIM_DIFFERENCE", .title = "DELTA ", .description = "Change in prediction from perturbation" },
+   [OPTIM_MUTUALINFO] = { .name = "OPTIM_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information with the target variable" },
    // End of list
 };
 
@@ -47,8 +45,6 @@ Feature* Feature_new(const Machine* host) {
 
 void Feature_done(Feature* this) {
    Row_done(&this->super);
-   free(this->direction);
-   free(this->change);
 }
 
 static void Feature_delete(Object* cast) {
@@ -62,10 +58,12 @@ static const char* Feature_name(Row* rp) {
    return fp->name;
 }
 
-static void Feature_writeChange(const Feature* fp, RichString* str) {
-}
-
-static void Feature_writeDirection(const Feature* fp, RichString* str) {
+static void Feature_writeMinMax(const Feature* fp, RichString* str) {
+   char buffer[16]; buffer[16] = '\0';
+   int shadow = CRT_colors[PROCESS_SHADOW];
+   size_t n = sizeof(buffer) - 1;
+   snprintf(buffer, n, "%8s ", fp->min_max);
+   RichString_appendWide(str, shadow, buffer);
 }
 
 static void Feature_writeName(const Feature* fp, RichString* str) {
@@ -112,31 +110,29 @@ static void Feature_writeField(const Row* super, RichString* str, RowField field
    const Feature* fp = (const Feature*) super;
 
    switch ((int)field) {
+   case LOCAL_MUTUALINFO:
+   case MODEL_MUTUALINFO:
+   case OPTIM_MUTUALINFO:
+      Feature_writeValue(str, fp->mutualinfo);
+      return;
    case LOCAL_IMPORTANCE:
    case MODEL_IMPORTANCE:
       Feature_writeValue(str, fp->importance);
       return;
-   case LOCAL_MUTUALINFO:
-   case MODEL_MUTUALINFO:
-      Feature_writeValue(str, fp->mutualinfo);
+   case OPTIM_DIFFERENCE:
+      Feature_writeValue(str, fp->difference);
       return;
-   case OPTMAX_DIRECTION:
-   case OPTMIN_DIRECTION:
-      Feature_writeDirection(fp, str);
-   case OPTMAX_CHANGE:
-   case OPTMIN_CHANGE:
-      Feature_writeChange(fp, str);
+   case OPTIM_MIN_MAX:
+      Feature_writeMinMax(fp, str);
       return;
    case LOCAL_FEATURE:
    case MODEL_FEATURE:
-   case OPTMAX_FEATURE:
-   case OPTMIN_FEATURE:
+   case OPTIM_FEATURE:
       Feature_writeName(fp, str);
       return;
    default:
       break;
    }
-   Feature_writeField(&fp->super, str, field);
 }
 
 static int Feature_compareByKey(const Row* v1, const Row* v2, int key) {

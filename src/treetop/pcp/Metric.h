@@ -50,7 +50,6 @@ typedef enum Metric_ {
    PCP_LOCAL_MUTUALINFO,	/* treetop.server.explaining.local.mutual_information */
    PCP_LOCAL_ELAPSED,		/* treetop.server.explaining.shap.elapsed_time */
    PCP_OPTIM_FEATURES,		/* treetop.server.optimising.features */
-   PCP_OPTIM_INC_DEC,		/* treetop.server.optimising.inc_dec */
    PCP_OPTIM_MIN_MAX,		/* treetop.server.optimising.min_max */
    PCP_OPTIM_DIFFERENCE,	/* treetop.server.optimising.difference */
    PCP_OPTIM_MUTUALINFO,	/* treetop.server.optimising.mutual_information */

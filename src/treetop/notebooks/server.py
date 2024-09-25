@@ -966,12 +966,12 @@ class TreetopServer():
         return model, train_X, train_y, test_X, test_y
 
     def optimise_update(self, count, df, column, i):
-        inst = str(count)
         feature = df.iloc[i]['feature']
         difference = df.iloc[i][column]
         if difference == 0:
             return False
         v = self.values
+        inst = str(count)
         value = v.lookup_mapping("optimising.features", inst)
         v.set_string(value, metricspec(feature))
         value = v.lookup_mapping("optimising.difference", inst)
@@ -981,6 +981,18 @@ class TreetopServer():
         value = v.lookup_mapping("optimising.mutual_information", inst)
         v.set(value, self.mutualinfo[feature].item())
         return True
+
+    def optimise_nodata(self, count):
+        v = self.values
+        inst = str(count)
+        value = v.lookup_mapping("optimising.features", inst)
+        v.set_string(value, '')
+        value = v.lookup_mapping("optimising.difference", inst)
+        v.set(value, self.NaN)
+        value = v.lookup_mapping("optimising.min_max", inst)
+        v.set_string(value, '')
+        value = v.lookup_mapping("optimising.mutual_information", inst)
+        v.set(value, self.NaN)
 
     def optimise_export(self, max_inc, max_dec, min_inc, min_dec, test_X):
         quarter = int(self._max_features / 4)
@@ -1015,15 +1027,7 @@ class TreetopServer():
             count += 1
         # clear out any remaining instance slots
         while count < self._max_features:
-            inst = str(count)
-            value = v.lookup_mapping("optimising.features", inst)
-            v.set_string(value, '')
-            value = v.lookup_mapping("optimising.difference", inst)
-            v.set(value, self.NaN)
-            value = v.lookup_mapping("optimising.min_max", inst)
-            v.set_string(value, '')
-            value = v.lookup_mapping("optimising.mutual_information", inst)
-            v.set(value, self.NaN)
+            self.optimise_nodata(count)
             count += 1
 
     def optimise(self, model, train_X, train_y, test_X, test_y):

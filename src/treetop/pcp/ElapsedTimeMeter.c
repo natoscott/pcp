@@ -48,7 +48,7 @@ static void ElapsedTimeMeter_display(const Object* cast, RichString* out) {
    RichString_appendAscii(out, CRT_colors[METER_TEXT], "tr ");
    len = xSnprintf(buffer, sizeof(buffer), "%.1f", this->values[1]);
    RichString_appendnAscii(out, CRT_colors[DYNAMIC_BLUE], buffer, len);
-   RichString_appendAscii(out, CRT_colors[METER_SHADOW], "samp ");
+   RichString_appendAscii(out, CRT_colors[METER_SHADOW], "sa ");
 
    float explain = this->values[2] + this->values[3] + this->values[4];
    len = xSnprintf(buffer, sizeof(buffer), "%.1f", explain);

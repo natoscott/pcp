@@ -29,7 +29,7 @@ static void FeaturesMeter_updateValues(Meter* this) {
    this->values[2] = mutual == -1 ? NAN : missing;
    this->values[3] = variance == -1 ? NAN : variance;
 
-   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuvar %zumi %zunan", total, variance, mutual, missing);
+   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuva %zumi %zunan", total, variance, mutual, missing);
 }
 
 const MeterClass FeaturesMeter_class = {

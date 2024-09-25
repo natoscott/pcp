@@ -29,9 +29,9 @@ const FeatureFieldData Feature_fields[] = {
    [LOCAL_FEATURE] = { .name = "LOCAL_FEATURE", .title = "                                      Important Metrics ", .description = "Most important metrics (features) from local SHAP" },
    [LOCAL_IMPORTANCE] = { .name = "LOCAL_IMPORTANCE", .title = "SHAP VALUE ", .description = "SHAP value importance measure" },
    [LOCAL_MUTUALINFO] = { .name = "LOCAL_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information for high SHAP value features" },
-   [OPTIM_FEATURE] = { .name = "OPTMIN_FEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
-   [OPTIM_MIN_MAX] = { .name = "OPTIM_MIN_MAX", .title = "MIN/MAX", .description = "Used minimum or maximum for perturbation" },
-   [OPTIM_DIFFERENCE] = { .name = "OPTIM_DIFFERENCE", .title = "DELTA ", .description = "Change in prediction from perturbation" },
+   [OPTIM_FEATURE] = { .name = "OPTIM_FEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
+   [OPTIM_MIN_MAX] = { .name = "OPTIM_MIN_MAX", .title = " TYPE ", .description = "Used minimum or maximum for perturbation" },
+   [OPTIM_DIFFERENCE] = { .name = "OPTIM_DIFFERENCE", .title = "DIFFERENCE ", .description = "Change in prediction from perturbation" },
    [OPTIM_MUTUALINFO] = { .name = "OPTIM_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information with the target variable" },
    // End of list
 };
@@ -59,10 +59,10 @@ static const char* Feature_name(Row* rp) {
 }
 
 static void Feature_writeMinMax(const Feature* fp, RichString* str) {
-   char buffer[16]; buffer[16] = '\0';
+   char buffer[8]; buffer[8] = '\0';
    int shadow = CRT_colors[PROCESS_SHADOW];
    size_t n = sizeof(buffer) - 1;
-   snprintf(buffer, n, "%8s ", fp->min_max);
+   snprintf(buffer, n, "  %s ", fp->min_max);
    RichString_appendWide(str, shadow, buffer);
 }
 
@@ -142,13 +142,19 @@ static int Feature_compareByKey(const Row* v1, const Row* v2, int key) {
    switch (key) {
    case LOCAL_FEATURE:
    case MODEL_FEATURE:
+   case OPTIM_FEATURE:
       return SPACESHIP_NULLSTR(f1->name, f2->name);
    case LOCAL_MUTUALINFO:
    case MODEL_MUTUALINFO:
+   case OPTIM_MUTUALINFO:
       return SPACESHIP_NUMBER(f1->mutualinfo, f2->mutualinfo);
    case LOCAL_IMPORTANCE:
    case MODEL_IMPORTANCE:
       return SPACESHIP_NUMBER(f1->importance, f2->importance);
+   case OPTIM_DIFFERENCE:
+      return SPACESHIP_NUMBER(f1->difference, f2->difference);
+   case OPTIM_MIN_MAX:
+      return SPACESHIP_NULLSTR(f1->min_max, f2->min_max);
    default:
       return Row_compare(v1, v2);
    }

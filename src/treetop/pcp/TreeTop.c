@@ -56,7 +56,7 @@ const ScreenDefaults Platform_defaultScreens[] = {
     .sortKey = "LOCAL_IMPORTANCE",
   },
   { .name = "Optimum importance",
-    .columns = "OPTIM_FEATURE OPTIM_MIN_MAX OPTIM_DELTA OPTIM_MUTUALINFO",
+    .columns = "OPTIM_FEATURE OPTIM_MIN_MAX OPTIM_DIFFERENCE OPTIM_MUTUALINFO",
   },
 };
 
@@ -120,7 +120,7 @@ static const char* Platform_metricNames[] = {
    [PCP_OPTIM_FEATURES] = "mmv.treetop.server.optimising.features",
    [PCP_OPTIM_MIN_MAX] = "mmv.treetop.server.optimising.min_max",
    [PCP_OPTIM_DIFFERENCE] = "mmv.treetop.server.optimising.difference",
-   [PCP_OPTIM_MUTUALINFO] = "mmv.treetop.server.optimising.mutual_infomation",
+   [PCP_OPTIM_MUTUALINFO] = "mmv.treetop.server.optimising.mutual_information",
    [PCP_OPTIM_ELAPSED] = "mmv.treetop.server.optimising.elapsed_time",
 
    [PCP_METRIC_COUNT] = NULL

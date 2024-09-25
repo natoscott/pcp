@@ -21,10 +21,10 @@ typedef struct Feature_ {
    /* default result offset to use for searching metrics */
    unsigned int offset;
 
+   char min_max[4];
+   float difference;
    float importance;
    float mutualinfo;
-   float difference;
-   char min_max[16];
 } Feature;
 
 typedef struct FeatureFieldData_ {

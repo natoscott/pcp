@@ -96,8 +96,8 @@ static void FeatureTable_updateOptimInfo(Feature* fp, int id, int offset) {
    String_safeStrncpy(fp->name, value.cp, sizeof(fp->name));
    free(value.cp);
 
-   if (Metric_instance(PCP_OPTIM_MIN_MAX, id, offset, &value, PM_TYPE_STRING))
-      value.cp = xStrdup("<unknown>");
+   if (!Metric_instance(PCP_OPTIM_MIN_MAX, id, offset, &value, PM_TYPE_STRING))
+      value.cp = xStrdup("---");
    String_safeStrncpy(fp->min_max, value.cp, sizeof(fp->min_max));
    free(value.cp);
 

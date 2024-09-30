@@ -110,15 +110,27 @@ void Platform_getHostname(char* buffer, size_t size);
 Table* Platform_getTable(const char* name);
 
 enum {
-   PLATFORM_LONGOPT_HOST = 128,
+   PLATFORM_LONGOPT_TARGET = 180,
+   PLATFORM_LONGOPT_IGNORE,
+   PLATFORM_LONGOPT_ARCHIVE,
+   PLATFORM_LONGOPT_SAMPLES,
+   PLATFORM_LONGOPT_SAMPLE_INTERVAL,
+   PLATFORM_LONGOPT_TRAINING_INTERVAL,
+   PLATFORM_LONGOPT_HOST,
    PLATFORM_LONGOPT_TIMEZONE,
    PLATFORM_LONGOPT_HOSTZONE,
 };
 
 #define PLATFORM_LONG_OPTIONS \
-      {PMLONGOPT_HOST, optional_argument, 0, PLATFORM_LONGOPT_HOST}, \
-      {PMLONGOPT_TIMEZONE, optional_argument, 0, PLATFORM_LONGOPT_TIMEZONE}, \
-      {PMLONGOPT_HOSTZONE, optional_argument, 0, PLATFORM_LONGOPT_HOSTZONE}, \
+      {"target", required_argument, 0, PLATFORM_LONGOPT_TARGET}, \
+      {"ignore", required_argument, 0, PLATFORM_LONGOPT_IGNORE}, \
+      {PMLONGOPT_ARCHIVE, required_argument, 0, PLATFORM_LONGOPT_ARCHIVE}, \
+      {PMLONGOPT_SAMPLES, required_argument, 0, PLATFORM_LONGOPT_SAMPLES}, \
+      {"sample-interval", required_argument, 0, PLATFORM_LONGOPT_SAMPLE_INTERVAL}, \
+      {"training-interval", required_argument, 0, PLATFORM_LONGOPT_TRAINING_INTERVAL}, \
+      {PMLONGOPT_HOST, required_argument, 0, PLATFORM_LONGOPT_HOST}, \
+      {PMLONGOPT_TIMEZONE, required_argument, 0, PLATFORM_LONGOPT_TIMEZONE}, \
+      {PMLONGOPT_HOSTZONE, no_argument, 0, PLATFORM_LONGOPT_HOSTZONE}, \
 
 void Platform_longOptionsUsage(const char* name);
 

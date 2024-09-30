@@ -146,7 +146,6 @@ class TreetopServer():
     def __init__(self):
         self.client = None
         self.source = None
-        self.datasets = None
         self.timestamp = None
         self.timestamp_s = None
         self.start_time = None
@@ -178,31 +177,17 @@ class TreetopServer():
     def options(self):
         """ Setup default command line argument option handling """
         opts = pmapi.pmOptions()
-        opts.pmSetShortOptions("a:h:D:V?A:S:T:O:s:t:Z:z")
+        opts.pmSetShortOptions("D:V?")
         opts.pmSetShortUsage("[option...]")
-        opts.pmSetLongOptionArchive()      # -a/--archive
-        opts.pmSetLongOptionArchiveFolio() # --archive-folio
-        opts.pmSetLongOptionHost()         # -h/--host
         opts.pmSetLongOptionDebug()        # -D/--debug
         opts.pmSetLongOptionVersion()      # -V/--version
         opts.pmSetLongOptionHelp()         # -?/--help
-        opts.pmSetLongOptionAlign()        # -A/--align
-        opts.pmSetLongOptionStart()        # -S/--start
-        opts.pmSetLongOptionFinish()       # -T/--finish
-        opts.pmSetLongOptionOrigin()       # -O/--origin
-        opts.pmSetLongOptionSamples()      # -s/--samples
-        opts.pmSetLongOptionInterval()     # -t/--interval
-        opts.pmSetLongOptionTimeZone()     # -Z/--timezone
-        opts.pmSetLongOptionHostZone()     # -z/--hostzone
         return opts
 
     def configure(self):
         os.putenv('PCP_DERIVED_CONFIG', '')
         self.config = self.pmconfig.set_config_path([])
         self.pmconfig.read_cmd_line()
-        self.datasets = self.opts.pmGetOptionArchives()
-        if not self.datasets:
-            raise pmapi.pmUsageErr("no dataset provided (-a/--archive)\n")
 
     def mapping(self):
         """ Helper which creates MMV instances, indoms, metrics
@@ -561,6 +546,8 @@ class TreetopServer():
                                                 mtype = MMV_TYPE_U32)
             self.sample_time = mmv.extend_item(top + 'timestamp',
                                              mtype = MMV_TYPE_FLOAT)
+            self.dataset = mmv.extend_item(top + 'archive',
+                                          mtype = MMV_TYPE_STRING)
             self.target = mmv.extend_item(top + 'target',
                                           mtype = MMV_TYPE_STRING)
             self.filter = mmv.extend_item(top + 'filter',
@@ -575,7 +562,8 @@ class TreetopServer():
 
     def source_connect(self):
         try:
-            log = self.datasets[0]
+            self.client.fetch() # refresh value for which archive to use
+            log = self.dataset()  # TODO- nuke
             ctx, src = pmapi.pmContext.set_connect_options(self.opts, log, None)
             self.pmfg = pmapi.fetchgroup(ctx, src)
             self.pmfg_ts = self.pmfg.extend_timestamp()
@@ -621,7 +609,7 @@ class TreetopServer():
         if not self.connect():
             sys.stderr.write('Cannot refresh\n')
             return
-        print('Server refreshing')
+        print('Refreshing from', self.dataset())
         # refresh information from the client
         self.client.fetch()
         reset = self.settings()

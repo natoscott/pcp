@@ -46,17 +46,25 @@ in the source distribution for its full text.
 
 Platform* pcp;
 
+/* command line options... */
+static const char* target = "disk.all.avactive";
+static const char* ignore = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
+static size_t sample_count = 720;
+static double sample_interval = 10;
+static double training_interval = 1;
+
 const ScreenDefaults Platform_defaultScreens[] = {
   { .name = "Model importance",
     .columns = "MODEL_FEATURE MODEL_IMPORTANCE MODEL_MUTUALINFO",
-    .sortKey = "MODEL_IMPORTANCE",
+    .sortKey = "MODEL_MUTUALINFO",
   },
   { .name = "Sample importance",
     .columns = "LOCAL_FEATURE LOCAL_IMPORTANCE LOCAL_MUTUALINFO",
-    .sortKey = "LOCAL_IMPORTANCE",
+    .sortKey = "LOCAL_MUTUALINFO",
   },
   { .name = "Optimum importance",
     .columns = "OPTIM_FEATURE OPTIM_MIN_MAX OPTIM_DIFFERENCE OPTIM_MUTUALINFO",
+    .sortKey = "OPTIM_MUTUALINFO",
   },
 };
 
@@ -445,19 +453,64 @@ void Platform_getHostname(char* buffer, size_t size) {
 
 void Platform_longOptionsUsage(ATTR_UNUSED const char* name) {
    printf(
+"   --target=METRICSPEC          target performance metric [see pmParseMetricSpec(1)]\n"
+"   --filter=METRICSPECS         comma-separated metric list, removed before training\n"
+"   --archive=FILE               metrics source is PCP archive FILE [see PCPIntro(1)]\n"
 "   --host=HOSTSPEC              metrics source is PMCD at HOSTSPEC [see PCPIntro(1)]\n"
+"   --training-interval=N        time delay (waited) between training evaluations\n"
+"   --sample-interval=N          sample interval used within the training window\n"
+"   --samples=N                  number of samples used in training time window\n"
 "   --hostzone                   set reporting timezone to local time of metrics source\n"
 "   --timezone=TZ                set reporting timezone\n");
 }
 
 CommandLineStatus Platform_getLongOption(int opt, ATTR_UNUSED int argc, char** argv) {
-   /* libpcp export without a header definition */
+   /* libpcp exports without any header definitions */
+   extern void __pmAddOptArchive(pmOptions*, char*);
    extern void __pmAddOptHost(pmOptions*, char*);
+   char* endnum;
 
    switch (opt) {
+      case PLATFORM_LONGOPT_TARGET:  /* --target=METRICSPEC */
+         target = optarg;
+         return STATUS_OK;
+
+      case PLATFORM_LONGOPT_IGNORE:  /* --ignore=METRICSPECS */
+         ignore = optarg;
+         return STATUS_OK;
+
+      case PLATFORM_LONGOPT_ARCHIVE:  /* --archive=FILE */
+         __pmAddOptArchive(&opts, optarg);
+         return STATUS_OK;
+
+      case PLATFORM_LONGOPT_SAMPLES:  /* --samples=N */
+         sample_count = (size_t)strtoull(optarg, &endnum, 10);
+         if (*endnum != '\0') {
+            pmprintf("%s: --%s requires a positive numeric argument\n", pmGetProgname(), PMLONGOPT_SAMPLES);
+            opts.errors++;
+            break;
+         }
+         return STATUS_OK;
+
+      case PLATFORM_LONGOPT_SAMPLE_INTERVAL:  /* --sample-interval=N */
+         sample_interval = strtod(optarg, &endnum);
+         if (*endnum != '\0' || sample_interval <= 0) {
+            pmprintf("%s: --%s requires a positive floating point argument\n", pmGetProgname(), "--sample-interval");
+            opts.errors++;
+            break;
+         }
+         return STATUS_OK;
+
+      case PLATFORM_LONGOPT_TRAINING_INTERVAL:  /* --training-interval=N */
+         training_interval = strtod(optarg, &endnum);
+         if (*endnum != '\0' || training_interval <= 0) {
+            pmprintf("%s: --%s requires a positive floating point argument\n", pmGetProgname(), "--training-interval");
+            opts.errors++;
+            break;
+         }
+         return STATUS_OK;
+
       case PLATFORM_LONGOPT_HOST:  /* --host=HOSTSPEC */
-         if (argv[optind][0] == '\0')
-            return STATUS_ERROR_EXIT;
          __pmAddOptHost(&opts, optarg);
          return STATUS_OK;
 
@@ -465,9 +518,9 @@ CommandLineStatus Platform_getLongOption(int opt, ATTR_UNUSED int argc, char** a
          if (opts.timezone) {
             pmprintf("%s: at most one of -Z and -z allowed\n", pmGetProgname());
             opts.errors++;
-         } else {
-            opts.tzflag = 1;
+	    break;
          }
+         opts.tzflag = 1;
          return STATUS_OK;
 
       case PLATFORM_LONGOPT_TIMEZONE:  /* --timezone=TZ */
@@ -476,9 +529,9 @@ CommandLineStatus Platform_getLongOption(int opt, ATTR_UNUSED int argc, char** a
          if (opts.tzflag) {
             pmprintf("%s: at most one of -Z and -z allowed\n", pmGetProgname());
             opts.errors++;
-         } else {
-            opts.timezone = optarg;
+	    break;
          }
+         opts.timezone = optarg;
          return STATUS_OK;
 
       default:
@@ -641,16 +694,25 @@ static mmv_metric2_t metrics[] = {
         .shorttext = "Current prediction timestamp (time since the epoch)",
         .helptext = "Prediction time string, training ends on prior sample",
     },
+    {   .name = "archive",
+        .item = 8,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_DISCRETE,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Metrics source is a recorded archive",
+        .helptext = "Path to PCP archive from which to source metrics",
+    },
+    {   .name = "hostspec",
+        .item = 9,
+        .type = MMV_TYPE_STRING,
+        .semantics = MMV_SEM_DISCRETE,
+        .dimension = MMV_UNITS(0,0,0,0,0,0),
+        .shorttext = "Metrics source is host specification",
+        .helptext = "Host specification from which to source metrics",
+    },
 };
 
 static const char* file = "treetop.client";
-
-/* command line options... */
-static const char* target = "disk.all.avactive";
-static const char* notrain = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
-static size_t sample_count = 720;
-static double sample_interval = 10;
-static double training_interval = 1;
 
 static void* MMV_init(void) {
    // TODO: flags = MMV_FLAG_PROCESS (cull file at stop) --v
@@ -681,7 +743,14 @@ void MMV_update(void* map, double timestamp) {
    size_t length;
    double sample_time = timestamp;
    time_t seconds = (int)timestamp;
+   char* hostspec = "";
+   char* archive = "";
    char buffer[64];
+
+   if (opts.nhosts > 0)
+      hostspec = opts.hosts[0];
+   if (opts.narchives > 0)
+      archive = opts.archives[0];
 
    timestamp -= seconds;
    timestamp *= 1000000; // usec component
@@ -691,8 +760,10 @@ void MMV_update(void* map, double timestamp) {
        snprintf(buffer+length, sizeof(buffer)-length, ".%d", (int)timestamp);
 
    mmv_stats_set_string(map, "target", "", target);
-   mmv_stats_set_string(map, "filter", "", notrain);
+   mmv_stats_set_string(map, "filter", "", ignore);
    mmv_stats_set_string(map, "timestamp_s", "", buffer);
+   mmv_stats_set_string(map, "archive", "", archive);
+   mmv_stats_set_string(map, "hostspec", "", hostspec);
 
    mmv_stats_set(map, "timestamp", "", sample_time);
    mmv_stats_set(map, "sampling.count", "", sample_count);

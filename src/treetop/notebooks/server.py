@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-import copy, os, re, sys, signal, time
+import copy, logging, os, re, sys, signal, time
 
 from datetime import datetime
 from collections import OrderedDict
@@ -40,6 +40,9 @@ try:
 except ImportError:
     shap_explanations = False
 
+# server logging facilities
+logger = logging.getLogger(__name__)
+
 # signal handling for IPC
 (refresh, finished) = (False, False)
 
@@ -54,11 +57,18 @@ def signal_finished(sig, frame):
     raise EOFError('Server finished via signal')
 
 def metricspec(s):
-    # change an xgboost-encoded name back into PCP metricspec
+    # change an xgboost-encoded name back into PCP metricspec;
     # xgboost requires special handling of [, ] - we use (, ).
     start = s.find('(')
     if start == -1: return s
     return s[:start] + '[' + s[start+1: -1] + ']'
+
+def xgb_encode(s):
+    # change an input PCP metricspec to xgboost-encoded name.
+    start = s.find('[')
+    if start != -1:
+        s = s[:start] + '(' + s[start+1: -1] + ')'
+    return re.sub(r'\[|\]|<', '', s)
 
 # DIFFI algorithm implementation does not exist as a module
 # Source code:  https://github.com/mattiacarletti/DIFFI.git
@@ -146,6 +156,7 @@ class TreetopServer():
     def __init__(self):
         self.client = None
         self.source = None
+        self.logfile = None
         self.timestamp = None
         self.timestamp_s = None
         self.start_time = None
@@ -486,11 +497,11 @@ class TreetopServer():
             reset = 'full'
         #elif self.sample_time() != self.timestamp:
         #    self.timestamp = self.sample_time()
-        #    print('RESET NE:', str(datetime.fromtimestamp(self.sample_time())), 'vs', str(datetime.fromtimestamp(self.timestamp)))
+        #    logger.debug('RESET NE:', str(datetime.fromtimestamp(self.sample_time())), 'vs', str(datetime.fromtimestamp(self.timestamp)))
         #    reset = 'full'
         else:
             self.timestamp += self._sample_interval
-            print('STEP FWD:', str(datetime.fromtimestamp(self.timestamp)))
+            logger.debug('STEP FWD: %s', str(datetime.fromtimestamp(self.timestamp)))
         self.timestamp_s = str(datetime.fromtimestamp(self.timestamp))
 
         values = self.values
@@ -511,15 +522,15 @@ class TreetopServer():
         value = values.lookup_mapping("training.window", None)
         values.set(value, timewindow)
 
-        print("Training interval:", self._training_interval)
-        print("Sample interval:", self._sample_interval)
-        print("Sample count:", self._sample_count)
-        print("Timestamp:", self.timestamp_s, '-', self.timestamp)
-        print("Target metric:", self.target())
-        print("Filter metrics:", self.filter().split())
-        print("Start time:", datetime.fromtimestamp(self.start_time), '-', self.start_time)
-        print("End time:", datetime.fromtimestamp(self.end_time), '-', self.end_time)
-        print("Total time: %.5f seconds" % (self.end_time - self.start_time))
+        logger.info("Training interval:", self._training_interval)
+        logger.info("Sample interval:", self._sample_interval)
+        logger.info("Sample count:", self._sample_count)
+        logger.info("Timestamp: %s - %s", self.timestamp_s, self.timestamp)
+        logger.info("Target metric:", self.target())
+        logger.info("Filter metrics:", self.filter().split())
+        logger.info("Start time: %s - %s", datetime.fromtimestamp(self.start_time), self.start_time)
+        logger.info("End time: %s - %s", datetime.fromtimestamp(self.end_time), self.end_time)
+        logger.info("Total time: %.5f seconds" % (self.end_time - self.start_time))
 
         if self._training_count == 1: # first time
             reset = 'full'
@@ -552,18 +563,18 @@ class TreetopServer():
                                           mtype = MMV_TYPE_STRING)
             self.filter = mmv.extend_item(top + 'filter',
                                           mtype = MMV_TYPE_STRING)
+            self.logfile = None
             self.client = mmv
         except pmapi.pmErr as error:
-            sys.stderr.write('%s: %s\n' % (error.progname(), error.message()))
-            sys.stderr.write('Failed "local:" connection setup\n')
+            logger.error('%s: %s', error.progname(), error.message())
+            logger.error('Failed "local:" connection setup')
             self.client = None
             return False
         return True
 
     def source_connect(self):
         try:
-            self.client.fetch() # refresh value for which archive to use
-            log = self.dataset()  # TODO- nuke
+            log = self.dataset()
             ctx, src = pmapi.pmContext.set_connect_options(self.opts, log, None)
             self.pmfg = pmapi.fetchgroup(ctx, src)
             self.pmfg_ts = self.pmfg.extend_timestamp()
@@ -579,8 +590,8 @@ class TreetopServer():
             self.pmconfig.finalize_options()
             self.source = src
         except pmapi.pmErr as error:
-            sys.stderr.write('%s: %s\n' % (error.progname(), error.message()))
-            sys.stderr.write('Failed source connection setup\n')
+            logger.error('%s: %s', error.progname(), error.message())
+            logger.error('Failed source connection setup')
             self.source = None
             return False
         return True
@@ -589,12 +600,17 @@ class TreetopServer():
         """ Connect both MMV and metric source contexts """
         if not self.client and not self.client_connect():
             return False # cannot proceed further, error reported
+        logger.info('Client fetching')
+        self.client.fetch()
+        logger.info('Client fetched')
+        if not self.logfile or self.logfile != self.dataset():
+            self.source = None
         if not self.source and not self.source_connect():
             return False # cannot proceed further, error reported
         return True
 
     def sleep(self):
-        print('Sleeping at timestep', self.timestamp_s, '-', self.timestamp)
+        logger.info('Sleep %.1f at timestep %s - %s', self._training_interval, self.timestamp_s, self.timestamp)
         value = self.values.lookup_mapping("processing.state", None)
         self.values.set_string(value, "waiting");
         time.sleep(self._training_interval)
@@ -606,12 +622,13 @@ class TreetopServer():
         return elapsed_time
 
     def refresh(self):
-        if not self.connect():
-            sys.stderr.write('Cannot refresh\n')
-            return
-        print('Refreshing from', self.dataset())
+        logger.info('Refreshing')
         # refresh information from the client
-        self.client.fetch()
+        if not self.connect():
+            logger.warning('Cannot refresh')
+            return False
+
+        logger.info('Refreshing from %s', self.dataset())
         reset = self.settings()
 
         value = self.values.lookup_mapping("processing.state", None)
@@ -621,7 +638,7 @@ class TreetopServer():
         timer = time.time()
         self.prepare_dataset(reset)
         timer = self.elapsed(timer, "sampling.elapsed_time")
-        print('Dataset preparation complete in %.5fsec' % (timer))
+        logger.info('Dataset preparation complete in %.5fsec', timer)
 
         value = self.values.lookup_mapping("processing.state", None)
         self.values.set_string(value, "training");
@@ -630,13 +647,14 @@ class TreetopServer():
         timer = time.time()
         ensemble, train_X, train_y, test_X, test_y = self.prepare_models()
         timer = self.elapsed(timer, "training.elapsed_time")
-        print('Model training complete in %.5fsec' % (timer))
+        logger.info('Model training complete in %.5fsec', timer)
 
         value = self.values.lookup_mapping("processing.state", None)
         self.values.set_string(value, "explaining");
 
         # finally, generate explanations that client tools can display
         self.explain_models(ensemble, train_X, train_y, test_X, test_y)
+        return True
 
     def prepare_dataset(self, reset='full'):
         # refresh from the metrics source to form a pandas dataframe
@@ -648,9 +666,9 @@ class TreetopServer():
         origin = pmapi.timespec(self.timestamp)
         delta = pmapi.timespec(self.sample_interval())
         count = self.sample_count()
-        print('Origin:', origin)
-        print('Delta:', delta)
-        print('Count:', count)
+        logger.debug('Origin: %s', origin)
+        logger.debug('Delta: %s', delta)
+        logger.debug('Count: %s', count)
         self.context.pmSetModeHighRes(PM_MODE_INTERP, origin, delta)
 
         while count > 0:
@@ -658,17 +676,17 @@ class TreetopServer():
             refresh_metrics = self.pmconfig.fetch()
             if refresh_metrics < 0:
                 break
-            #print('Sampling at:', self.pmfg_ts())
+            #logger.debug('Sampling at: %s', self.pmfg_ts())
             result = self.pmconfig.get_ranked_results(valid_only=True)
             self.append_sample(count, result)
 
         self.df = self.df.replace(b'', None)  # from .loc
         self.df = self.df.astype(self.dtypes, copy=False)
         self.df = self.df.reindex(columns=self.dtypes.keys())
-        #print('Reindexed dataframe, shape:', self.df.shape)
-        #print('Columns', self.df.columns[:10])
-        #print('Dtypes', list(self.df.dtypes)[:10])
-        #print('Values', self.df[:10])
+        #logger.debug('Reindexed dataframe, shape:', self.df.shape)
+        #logger.debug('Columns', self.df.columns[:10])
+        #logger.debug('Dtypes', list(self.df.dtypes)[:10])
+        #logger.debug('Values', self.df[:10])
 
     def lookup_dtype(self, desc):
         """ Map the appropriate pandas type for a metric descriptor """
@@ -762,8 +780,8 @@ class TreetopServer():
         """ pick top-most anomalous features to add to the raw dataset """
         fit = df.to_numpy()[np.where(y_pred_diffi == 1)]
         diffi, ord_idx_diffi, exec_time_diffi = local_diffi_batch(iso, fit)
-        #print('Average time Local-DIFFI:', round(np.mean(exec_time_diffi), 5))
-        #print('Total time Local-DIFFI:', round(np.sum(exec_time_diffi), 5))
+        #logger.debug('Average time Local-DIFFI:', round(np.mean(exec_time_diffi), 5))
+        #logger.debug('Total time Local-DIFFI:', round(np.sum(exec_time_diffi), 5))
 
         # use DIFFI anomaly values to find the features contributing most
         rank_df = pd.DataFrame(diffi).sum().nlargest(N, keep='all')
@@ -776,7 +794,7 @@ class TreetopServer():
             # fill in just the anomaly values now (replacing zeroes)
             for diffi_index, value_index in enumerate(np.where(y_pred_diffi == 1)[0]):
                 value[value_index] = diffi[diffi_index][i]
-            #print('Anomaly:', key, 'score:', value)
+            #logger.debug('Anomaly: %s score: %s', key, value)
             frame[key] = value
         return pd.DataFrame(data=frame, dtype='float64')
 
@@ -789,8 +807,8 @@ class TreetopServer():
         anomalies_df = self.top_anomaly_features(iso, y_pred_diffi, df0,
                                                  self._max_anomaly_features)
         t1 = time.time()
-        print('Anomaly time:', t1 - t0)
-        print('Anomaly features:', len(anomalies_df.columns))
+        logger.info('Anomaly time:', t1 - t0)
+        logger.info('Anomaly features:', len(anomalies_df.columns))
         value = self.values.lookup_mapping("features.anomalies", None)
         self.values.set(value,  len(anomalies_df))
         return anomalies_df
@@ -804,9 +822,9 @@ class TreetopServer():
         except ValueError:
             return train_X # no columns met criteria, training will struggle
         t1 = time.time()
-        print('Variance time:', t1 - t0)
+        logger.info('Variance time:', t1 - t0)
         keep = cull.get_feature_names_out()
-        print('Keeping', len(keep), 'of', train_X.shape[1], 'columns with variance')
+        logger.info('Keeping %d of %d columns with variance', len(keep), train_X.shape[1])
         value = self.values.lookup_mapping("features.variance", None)
         self.values.set(value, len(keep))
         return train_X[keep]
@@ -822,7 +840,7 @@ class TreetopServer():
         mi = mutual_info_regression(clean_X, clean_y, discrete_features=False)
         mi /= np.max(mi)  # normalise based on largest value observed
         t1 = time.time()
-        print('MutualInformation time:', t1 - t0)
+        logger.info('MutualInformation time:', t1 - t0)
 
         results = {}
         for i, column in enumerate(clean_X.columns):
@@ -834,31 +852,30 @@ class TreetopServer():
         drop_columns = clean_X.columns[indices]
 
         keeping = clean_X.shape[1] - len(drop_columns)
-        print('Keeping', keeping, 'columns with MutualInformation')
+        logger.info('Keeping %d columns with MutualInformation', keeping)
         if len(drop_columns) > self._max_mutualinfo_features:
             # still too many so reduce using argsort to prioritize -
             # caps the number of features after mutual information;
             # argsort arranges values from smallest to largest MI.
             upuntil = mi.shape[0] - self._max_mutualinfo_features
             indices = mi.argsort()[0:upuntil]
-            print('Limit', upuntil, 'columns with MutualInformation')
+            logger.info('Limit %d columns with MutualInformation', upuntil)
 
         clean_X = clean_X.drop(clean_X.columns[indices], axis=1)
         train_X = train_X[clean_X.columns]  # undo NaN->0
-        print('MutualInformation shape:', train_X.shape)
+        logger.info('MutualInformation shape: %s', train_X.shape)
 
         value = self.values.lookup_mapping("features.mutual_information", None)
         self.values.set(value, train_X.shape[1])
         return train_X
 
-    def prepare_split(self, target, notrain, splits=5, verbose=0):
+    def prepare_split(self, target, notrain, splits=5):
         targets = [target]
         window = self.df
-        if verbose:
-            print('Dimensionality reduction for training dataset')
-            print('Initial sample @', window.iloc[0]['timestamp'])
-            print('Initial shape:', window.shape)
-            print('Final sample @', window.iloc[-1]['timestamp'])
+        logger.debug('Dimensionality reduction for training dataset')
+        logger.debug('Initial sample @', window.iloc[0]['timestamp'])
+        logger.debug('Initial shape:', window.shape)
+        logger.debug('Final sample @', window.iloc[-1]['timestamp'])
     
         # ensure target metrics (y) values are valid
         window = window.dropna(subset=targets, ignore_index=True)
@@ -868,8 +885,8 @@ class TreetopServer():
 
         # remove columns (performance metrics) requested by user
         columns = copy.deepcopy(notrain)
-        if verbose: print('Dropping notrain', len(columns), 'columns:', columns)
-        clean_X = window.drop(columns=columns)
+        logger.debug('Dropping notrain %d columns: %s', len(columns), columns)
+        clean_X = window.drop(columns=columns, errors='ignore')
     
         # automated feature engineering based on time
         times_X = self.timestamp_features(window['timestamp'])
@@ -884,7 +901,7 @@ class TreetopServer():
     
         # automated anomaly-based feature engineering
         quirk_X = self.anomaly_features(clean_X)
-        if verbose: print('quirk_X shape:', quirk_X.shape)
+        logger.debug('quirk_X shape: %s', quirk_X.shape)
     
         # merge reduced set with new features
         clean_X = pd.merge(times_X, clean_X, left_index=True, right_index=True)
@@ -911,11 +928,10 @@ class TreetopServer():
         test_y = clean_y.iloc[[finish]]
         train_y = clean_y.iloc[0:finish, :]
     
-        if verbose > 1:
-            print('Final training y shape:', train_y.shape, 'type:', type(train_y))
-            print('Final training X shape:', train_X.shape, 'type:', type(train_X))
-            print('Final test set y shape:', test_y.shape, 'type:', type(test_y))
-            print('Final test set X shape:', test_X.shape, 'type:', type(test_X))
+        logger.debug('Final training y: %s type: %s', train_y.shape, type(train_y))
+        logger.debug('Final training X: %s type: %s', train_X.shape, type(train_X))
+        logger.debug('Final test set y: %s type: %s', test_y.shape, type(test_y))
+        logger.debug('Final test set X: %s type: %s', test_X.shape, type(test_X))
     
         return (train_X, train_y, test_X, test_y, time_cv, timestr)
  
@@ -928,13 +944,14 @@ class TreetopServer():
         # - perform feature reduction via variance, mutual information.
         # - prepare separate training, validation and testing datasets.
         # - train XGBoost regression model for prediction/explanations.
-        print("Target metric:", self.target())
-        filtered = self.filter().split(',')
-        print("Filter metrics:", filtered)
+        target = xgb_encode(self.target())
+        logger.info("Target XGB metric: %s", target)
+        ignore = [xgb_encode(x) for x in self.filter().split(',')]
+        logger.info("Ignore XGB metrics: %s", ignore)
 
-        # TODO - drop time series CV - proving ineffective, costly
+        # drop time series CV - so far ineffective and expensive
         (train_X, train_y, test_X, test_y, time_cv, timestr) = \
-            self.prepare_split(self.target(), filtered, verbose=1)
+            self.prepare_split(target, ignore)
 
         early = xgb.callback.EarlyStopping(10, metric_name='rmse', save_best=True)
         model = xgb.XGBRegressor(
@@ -946,11 +963,9 @@ class TreetopServer():
             subsample=1.0,
             colsample_bytree=1.0,
             callbacks=[early],
-            n_jobs=-1,
-            #seed=1,
+            n_jobs=-1
         )
         model.fit(train_X, train_y, eval_set=[(test_X, test_y)], verbose=0)
-
         return model, train_X, train_y, test_X, test_y
 
     def optimise_update(self, count, df, column, i):
@@ -1019,7 +1034,7 @@ class TreetopServer():
             count += 1
 
     def optimise(self, model, train_X, train_y, test_X, test_y):
-        print('Calculating optimisation importance')
+        logger.info('Calculating optimisation importance')
         timer = time.time()
 
         count = test_X.shape[1]
@@ -1047,7 +1062,7 @@ class TreetopServer():
         self.optimise_export(max_inc, max_dec, min_inc, min_dec, test_X)
 
         timer = self.elapsed(timer, "optimising.elapsed_time")
-        print('Finished optimisation importance in %.5f seconds' % (timer))
+        logger.info('Finished optimisation importance in %.5f seconds', timer)
 
     def confidence_level(self, model, target, test_X, test_y):
         """ Make prediction using latest values and compare to ground truth """
@@ -1055,10 +1070,10 @@ class TreetopServer():
         pred = model.predict(test_X)[0]
         diff = abs(pred - goal)
         if diff == 0:
-            ratio = 1  # avoid divide-by-zero, highly confident
+            ratio = 1.0 # avoid divide-by-zero, highly confident
         else:
             ratio = 1.0 - (diff / goal)
-        print('Confidence: %.5f' % (ratio * 100.0))
+        logger.debug('Confidence: %.5f', ratio * 100.0)
         value = self.values.lookup_mapping("explaining.model.confidence", None)
         self.values.set(value, ratio * 100.0)
 
@@ -1077,8 +1092,8 @@ class TreetopServer():
         feature_map = booster.get_score(importance_type=self._importance_type)
         top_features = sorted(feature_map.items(), key=lambda item: item[1])
         top_features = top_features[::-1][:self._max_features]
-        print('Metrics', [item[0] for item in top_features])
-        print('Importance', [item[1] for item in top_features])
+        logger.info('Metrics %s', [item[0] for item in top_features])
+        logger.info('Importance %s', [item[1] for item in top_features])
         timer = time.time()
         for i, feature in enumerate(top_features):
             inst = str(i)
@@ -1092,7 +1107,7 @@ class TreetopServer():
             value = v.lookup_mapping("explaining.model.mutual_information", inst)
             v.set(value, topmi)
         timer = self.elapsed(timer, "explaining.model.elapsed_time")
-        print('Finished model importance in %.5f seconds [%d]' % (timer, i+1))
+        logger.info('Finished model importance in %.5f seconds [%d]', timer, i+1)
         while i < self._max_features:  # clear any remaining instances
             inst = str(i + 1)
             value = v.lookup_mapping("explaining.model.features", inst)
@@ -1105,9 +1120,9 @@ class TreetopServer():
 
     def local_importance(self, model, train_X, test_X):
         if not shap_explanations:
-            print('Skipping SHAP importance')
+            logger.info('Skipping SHAP importance')
             return
-        print('Calculating SHAP importance')
+        logger.info('Calculating SHAP importance')
         v = self.values
         timer = time.time()
         explainer = shap.TreeExplainer(model)
@@ -1134,7 +1149,7 @@ class TreetopServer():
                 break
             count += 1
         timer = self.elapsed(timer, "explaining.local.elapsed_time")
-        print('Finished SHAP importance in %.5f seconds [%d]' % (timer, count))
+        logger.info('Finished SHAP importance in %.5f seconds [%d]', timer, count)
         while count < self._max_features:  # clear any remaining instances
             inst = str(count)
             value = v.lookup_mapping("explaining.local.features", inst)
@@ -1148,9 +1163,10 @@ class TreetopServer():
     def explain_models(self, model, train_X, train_y, test_X, test_y):
         """ Generate global and local feature importance measures,  """
         """ permutation optimisation assessment and update metrics. """
+        target = xgb_encode(self.target())
 
         # Firstly, calculate and export a confidence level for the model
-        self.confidence_level(model, self.target(), test_X, test_y)
+        self.confidence_level(model, target, test_X, test_y)
 
         # Model feature importance measures
         self.model_importance(model)
@@ -1162,6 +1178,7 @@ class TreetopServer():
         self.optimise(model, train_X, train_y, test_X, test_y)
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='treetop.log', level=logging.DEBUG) #INFO
 
     signal.signal(signal.SIGHUP, signal_refresh)
     signal.signal(signal.SIGINT, signal_finished)
@@ -1172,8 +1189,7 @@ if __name__ == '__main__':
     try:
         server.configure()
     except pmapi.pmErr as error:
-        sys.stderr.write("%s: %s" % (error.progname(), error.message()))
-        sys.stderr.write("\n")
+        logger.error("%s: %s", error.progname(), error.message())
         sys.exit(1)
     except pmapi.pmUsageErr as usage:
         usage.message()

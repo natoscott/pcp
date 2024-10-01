@@ -72,9 +72,13 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
    int shadow = CRT_colors[PROCESS_SHADOW];
    int attr = CRT_colors[PROCESS_COMM];
    size_t end, n = sizeof(buffer) - 1;
+   const char* name = fp->name;
    char* inst;
 
-   end = snprintf(buffer, n, "%55s ", fp->name);
+   end = strlen(name);
+   if (end >= 55)
+      name += end - 55; /* drop 1st N chars */
+   end = snprintf(buffer, n, "%55s ", name);
    RichString_appendWide(str, baseattr, buffer);
    if ((inst = strchr(buffer, '[')) != NULL) {
       n = (size_t)(inst - buffer);

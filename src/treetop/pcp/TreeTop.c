@@ -14,6 +14,7 @@ in the source distribution for its full text.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pcp/libpcp.h>
 #include <pcp/mmv_stats.h>
 
 #include "CPUMeter.h"
@@ -190,6 +191,22 @@ static void* MMV_init();
 static void MMV_done(void* map);
 static void MMV_update(void* map, double time);
 
+bool Platform_startServer(void) {
+   __pmExecCtl_t *ctl = NULL;
+   int sts;
+
+   sts = __pmProcessAddArg(&ctl, "notebooks/server.py"); /*TODO: location? */
+   if (sts < 0)
+      return false;
+   sts = __pmProcessExec(&ctl, PM_EXEC_TOSS_ALL, 0 /*nowait*/);
+   if (sts < 0) {
+      fprintf(stderr, "Cannot setup treetop server: %s\n", pmErrStr(sts));
+      return false;
+   }
+
+   return true;
+}
+
 bool Platform_init(void) {
    pcp = xCalloc(1, sizeof(Platform));
    pcp->map = MMV_init();
@@ -206,6 +223,11 @@ bool Platform_init(void) {
       source = "local:";
    }
 #endif
+
+   if (! Platform_startServer()) {
+      Platform_done();
+      return false;
+   }
 
    //
    // TODO: PCP_TMP_DIR for MMV

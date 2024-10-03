@@ -51,8 +51,8 @@ Platform* pcp;
 static const char* target = "disk.all.avactive";
 static const char* ignore = "disk.all.aveq,disk.all.read,disk.all.blkread,disk.all.read_bytes,disk.all.total,disk.all.blktotal,disk.all.total_bytes,disk.all.write,disk.all.blkwrite,disk.all.write_bytes";
 static size_t sample_count = 720;
-static double sample_interval = 10;
-static double training_interval = 1;
+static double sample_interval = 15;
+static double training_interval = 300;
 
 const ScreenDefaults Platform_defaultScreens[] = {
   { .name = "Model importance",

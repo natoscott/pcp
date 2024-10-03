@@ -802,14 +802,17 @@ class TreetopServer():
             frame[key] = value
         return pd.DataFrame(data=frame, dtype='float64')
 
-    def anomaly_features(self, df):
+    def anomaly_features(self, train_y, train_X):
         """ anomaly feature engineering - add up to a limit of new features """
         t0 = time.time()
-        df0 = df.fillna(0)
-        iso = IsolationForest(n_jobs=-1).fit(df0)
-        y_pred_diffi = np.array(iso.decision_function(df0) < 0).astype('int')
-        anomalies_df = self.top_anomaly_features(iso, y_pred_diffi, df0,
+        clean_y = train_y.values.flatten()
+        clean_X = train_X.fillna(0)
+        iso = IsolationForest(n_jobs=-1).fit(clean_X)
+        y_pred_diffi = np.array(iso.decision_function(clean_X)<0).astype('int')
+        anomalies_df = self.top_anomaly_features(iso, y_pred_diffi, clean_X,
                                                  self._max_anomaly_features)
+        mutual_info_, _ = self.mutual_information(clean_y, anomalies_df)
+        self.mutualinfo = self.mutualinfo.join(mutual_info_)
         t1 = time.time()
         logger.info('Anomaly time: %.5s', t1 - t0)
         logger.info('Anomaly features: %d', len(anomalies_df.columns))
@@ -821,13 +824,12 @@ class TreetopServer():
         """ Automated dimensionality reduction using variance """
         t0 = time.time()
         try:
-           cull = VarianceThreshold(threshold=self._variance_threshold)
-           cull.fit(train_X)
+            cull = VarianceThreshold(threshold=self._variance_threshold)
+            cull.fit(train_X)
         except ValueError:
             return train_X # no columns met criteria, training will struggle
         except RuntimeError as error:
-            logger.warning("reduce_with_variance %s, error %s", train_X.shape, error)
-            return train_X
+            logger.error("reduce_with_variance %s, error %s", train_X.shape, error)
         t1 = time.time()
         logger.info('Variance time: %.5fs', t1 - t0)
         keep = cull.get_feature_names_out()
@@ -836,23 +838,26 @@ class TreetopServer():
         self.values.set(value, len(keep))
         return train_X[keep]
 
+    def mutual_information(self, clean_y, clean_X):
+        """ Calculate all feature's mutual information with target variable """
+        # TODO: scikit-learn 1.5+ adds optional n_jobs[=-1] parameter here:
+        mi = mutual_info_regression(clean_X, clean_y, discrete_features=False)
+        mi /= np.max(mi)  # normalise based on largest value observed
+        results = {}
+        for i, column in enumerate(clean_X.columns):
+            results[column] = list([mi[i]])
+        df = pd.DataFrame(data=results, dtype='float64')
+        return df, mi
+
     def reduce_with_mutual_info(self, train_y, train_X):
         """ Automated dimensionality reduction using mutual information """
         clean_X = train_X.fillna(0)
         clean_y = train_y.values.flatten()
 
-        # calculate all features mutual information with the target variable
         t0 = time.time()
-        # TODO: scikit-learn 1.5+ adds optional n_jobs[=-1] parameter here:
-        mi = mutual_info_regression(clean_X, clean_y, discrete_features=False)
-        mi /= np.max(mi)  # normalise based on largest value observed
+        self.mutualinfo, mi = self.mutual_information(clean_y, clean_X)
         t1 = time.time()
         logger.info('MutualInformation time: %.5f', t1 - t0)
-
-        results = {}
-        for i, column in enumerate(clean_X.columns):
-            results[column] = list([mi[i]])
-        self.mutualinfo = pd.DataFrame(data=results, dtype='float64')
 
         cull = mi <= self._mutualinfo_threshold
         indices = np.where(cull)
@@ -895,9 +900,6 @@ class TreetopServer():
         logger.debug('Dropping notrain %d columns: %s', len(columns), columns)
         clean_X = window.drop(columns=columns, errors='ignore')
     
-        # automated feature engineering based on time
-        times_X = self.timestamp_features(window['timestamp'])
-
         # extract sample (prediction) timestamp
         clean_y = clean_X.loc[:, targets]
         timestr = clean_X.iloc[-1]['timestamp']
@@ -908,19 +910,20 @@ class TreetopServer():
     
         # automated feature reduction based on variance
         clean_X = self.reduce_with_variance(clean_X)
-    
-        # automated anomaly-based feature engineering
-        quirk_X = self.anomaly_features(clean_X)
-        logger.debug('quirk_X shape: %s', quirk_X.shape)
-    
-        # merge reduced set with new features
+
+        # automated feature engineering based on time
+        times_X = self.timestamp_features(window['timestamp'])
+        #logger.debug('times_X shape: %s', times_X.shape)
         clean_X = pd.merge(times_X, clean_X, left_index=True, right_index=True)
-        clean_X = pd.merge(clean_X, quirk_X, left_index=True, right_index=True)
 
         # automated feature reduction based on mutual information
-        # NB: has side-effect of keeping self.mutualinfo values
         clean_X = self.reduce_with_mutual_info(clean_y, clean_X)
     
+        # automated anomaly-based feature engineering
+        quirk_X = self.anomaly_features(clean_y, clean_X)
+        #logger.debug('quirk_X shape: %s', quirk_X.shape)
+        clean_X = pd.merge(clean_X, quirk_X, left_index=True, right_index=True)
+
         # prepare for cross-validation over the training window
         final_X = clean_X
         finish = final_X.shape[0] - 1

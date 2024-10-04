@@ -73,15 +73,40 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
    int attr = CRT_colors[PROCESS_COMM];
    size_t end, n = sizeof(buffer) - 1;
    const char* name = fp->name;
-   char* inst;
+   char* timestamp;
+   char* anomalies;
+   char* instance;
 
    end = strlen(name);
    if (end >= 55)
       name += end - 55; /* drop 1st N chars */
    end = snprintf(buffer, n, "%55s ", name);
+
+   if ((timestamp = (strstr(buffer, "timestamp-"))) != NULL) {
+      n = (size_t)(timestamp - buffer) + 9;
+      buffer[n] = ' '; /* 1st hyphen */
+   }
+   if ((anomalies = (strstr(buffer, "anomalies-"))) != NULL) {
+      n = (size_t)(anomalies - buffer) + 9;
+      buffer[n] = ' '; /* 1st hyphen */
+   }
+   instance = strchr(buffer, '[');
    RichString_appendWide(str, baseattr, buffer);
-   if ((inst = strchr(buffer, '[')) != NULL) {
-      n = (size_t)(inst - buffer);
+
+   if (timestamp) {
+      n = (size_t)(timestamp - buffer);
+      RichString_setAttrn(str, shadow, n, 9);
+      RichString_setAttrn(str, CRT_colors[DYNAMIC_GRAY], n+10, end);
+   }
+
+   if (anomalies) {
+      n = (size_t)(anomalies - buffer);
+      RichString_setAttrn(str, shadow, n, 9);
+      RichString_setAttrn(str, CRT_colors[DYNAMIC_YELLOW], n+10, end);
+   }
+
+   if (instance) {
+      n = (size_t)(instance - buffer);
       RichString_setAttrn(str, shadow, n, 1);
       RichString_setAttrn(str, attr, n + 1, end - n - 3);
       RichString_setAttrn(str, shadow, end - 2, 1);
@@ -93,7 +118,7 @@ static void Feature_writeValue(RichString* str, double value) {
    char buffer[16];
 
    if (!isNonnegative(value)) {
-      RichString_appendAscii(str, shadowColor, "        N/A ");
+      RichString_appendAscii(str, shadowColor, "       N/A ");
       return;
    }
 
@@ -104,6 +129,23 @@ static void Feature_writeValue(RichString* str, double value) {
       len = snprintf(buffer, sizeof(buffer), " %9.0f ", value);
    else
       len = snprintf(buffer, sizeof(buffer), " %9.1f ", value);
+   if (len < 0)
+      RichString_appendAscii(str, shadowColor, "       ??? ");
+   else
+      RichString_appendnAscii(str, shadowColor, buffer, len);
+}
+
+static void Feature_writeValueWithSign(RichString* str, double value) {
+   int shadowColor = CRT_colors[PROCESS_SHADOW];
+   char buffer[16];
+
+   int len;
+   if (value < 1.0)
+      len = snprintf(buffer, sizeof(buffer), " %+9.5f ", value);
+   else if ((double)(int)value == value)
+      len = snprintf(buffer, sizeof(buffer), " %+9.0f ", value);
+   else
+      len = snprintf(buffer, sizeof(buffer), " %+9.1f ", value);
    if (len < 0)
       RichString_appendAscii(str, shadowColor, "        ??? ");
    else
@@ -124,7 +166,7 @@ static void Feature_writeField(const Row* super, RichString* str, RowField field
       Feature_writeValue(str, fp->importance);
       return;
    case OPTIM_DIFFERENCE:
-      Feature_writeValue(str, fp->difference);
+      Feature_writeValueWithSign(str, fp->difference);
       return;
    case OPTIM_MIN_MAX:
       Feature_writeMinMax(fp, str);

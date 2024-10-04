@@ -163,6 +163,7 @@ class TreetopServer():
         self.start_time = None
         self.end_time = None
         self.mutualinfo = None
+        self.target_value = None
         self.NaN = float("nan")
 
         # pmconfig state
@@ -748,6 +749,7 @@ class TreetopServer():
         """ (used in the treetop recent-values lag graph display) """
         valueset = window[target].tolist()[-self._sample_valueset:]
         values = self.values
+        self.target_value = valueset[0]
         count = 0
         while count < self._sample_valueset or count < len(valueset):
             inst = str(count)
@@ -982,14 +984,14 @@ class TreetopServer():
     def optimise_update(self, count, df, column, i):
         feature = df.iloc[i]['feature']
         difference = df.iloc[i][column]
-        if difference == 0:
+        if difference == 0 or not self.target_value:
             return False
         v = self.values
         inst = str(count)
         value = v.lookup_mapping("optimising.features", inst)
         v.set_string(value, metricspec(feature))
         value = v.lookup_mapping("optimising.difference", inst)
-        v.set(value, difference)
+        v.set(value, difference - self.target_value)
         value = v.lookup_mapping("optimising.min_max", inst)
         v.set_string(value, column)
         value = v.lookup_mapping("optimising.mutual_information", inst)

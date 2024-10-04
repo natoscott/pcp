@@ -25,9 +25,9 @@ static void FeaturesMeter_updateValues(Meter* this) {
 
    this->total = MAXIMUM(total, this->total);
    this->values[0] = total == -1 ? NAN : total;
-   this->values[1] = missing == -1 ? NAN : missing;
-   this->values[2] = mutual == -1 ? NAN : missing;
-   this->values[3] = variance == -1 ? NAN : variance;
+   this->values[1] = variance == -1 ? NAN : variance;
+   this->values[2] = mutual == -1 ? NAN : mutual;
+   this->values[3] = missing == -1 ? NAN : missing;
 
    xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuva %zumi %zunan", total, variance, mutual, missing);
 }

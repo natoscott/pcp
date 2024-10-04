@@ -23,13 +23,13 @@ in the source distribution for its full text.
 
 const FeatureFieldData Feature_fields[] = {
    [0] = { .name = "" },
-   [MODEL_FEATURE] = { .name = "MODEL_FEATURE", .title = "                                Key Explanatory Metrics ", .description = "Most important metrics (features) globally" },
+   [MODEL_FEATURE] = { .name = "MODEL_FEATURE", .title = " Key Explanatory Metrics ", .description = "Most important metrics (features) globally" },
    [MODEL_IMPORTANCE] = { .name = "MODEL_IMPORTANCE", .title = "IMPORTANCE ", .description = "Model-based feature importance measure" },
    [MODEL_MUTUALINFO] = { .name = "MODEL_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information with the target variable" },
-   [LOCAL_FEATURE] = { .name = "LOCAL_FEATURE", .title = "                                      Important Metrics ", .description = "Most important metrics (features) from local SHAP" },
+   [LOCAL_FEATURE] = { .name = "LOCAL_FEATURE", .title = " Important Metrics ", .description = "Most important metrics (features) from local SHAP" },
    [LOCAL_IMPORTANCE] = { .name = "LOCAL_IMPORTANCE", .title = "SHAP VALUE ", .description = "SHAP value importance measure" },
    [LOCAL_MUTUALINFO] = { .name = "LOCAL_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information for high SHAP value features" },
-   [OPTIM_FEATURE] = { .name = "OPTIM_FEATURE", .title = "                           Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
+   [OPTIM_FEATURE] = { .name = "OPTIM_FEATURE", .title = " Key Metrics for Optimisation ", .description = "Important metrics for optimisation based on minima perturbations" },
    [OPTIM_MIN_MAX] = { .name = "OPTIM_MIN_MAX", .title = " TYPE ", .description = "Used minimum or maximum for perturbation" },
    [OPTIM_DIFFERENCE] = { .name = "OPTIM_DIFFERENCE", .title = "DIFFERENCE ", .description = "Change in prediction from perturbation" },
    [OPTIM_MUTUALINFO] = { .name = "OPTIM_MUTUALINFO", .title = "MUTUALINFO ", .description = "Mutual information with the target variable" },
@@ -68,19 +68,17 @@ static void Feature_writeMinMax(const Feature* fp, RichString* str) {
 
 static void Feature_writeName(const Feature* fp, RichString* str) {
    char buffer[256]; buffer[255] = '\0';
+   size_t strStart = RichString_size(str);
    int baseattr = CRT_colors[PROCESS_THREAD];
    int shadow = CRT_colors[PROCESS_SHADOW];
    int attr = CRT_colors[PROCESS_COMM];
-   size_t end, n = sizeof(buffer) - 1;
-   const char* name = fp->name;
+   size_t end, n;
    char* timestamp;
    char* anomalous;
    char* instance;
 
-   end = strlen(name);
-   if (end >= 55)
-      name += end - 55; /* drop 1st N chars */
-   end = snprintf(buffer, n, "%55s ", name);
+   end = snprintf(buffer, sizeof(buffer) - 1, " %s", fp->name);
+   end += strStart;
 
    if ((timestamp = (strstr(buffer, "timestamp-"))) != NULL) {
       n = (size_t)(timestamp - buffer) + 9;
@@ -94,22 +92,22 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
    RichString_appendWide(str, baseattr, buffer);
 
    if (timestamp) {
-      n = (size_t)(timestamp - buffer);
+      n = strStart + (size_t)(timestamp - buffer);
       RichString_setAttrn(str, shadow, n, 9);
-      RichString_setAttrn(str, CRT_colors[DYNAMIC_GRAY], n+10, end);
+      RichString_setAttrn(str, CRT_colors[DYNAMIC_GRAY], n + 10, end);
    }
 
    if (anomalous) {
-      n = (size_t)(anomalous - buffer);
+      n = strStart + (size_t)(anomalous - buffer);
       RichString_setAttrn(str, shadow, n, 9);
-      RichString_setAttrn(str, CRT_colors[DYNAMIC_YELLOW], n+10, end);
+      RichString_setAttrn(str, CRT_colors[DYNAMIC_YELLOW], n + 10, end);
    }
 
    if (instance) {
-      n = (size_t)(instance - buffer);
+      n = strStart + (size_t)(instance - buffer);
       RichString_setAttrn(str, shadow, n, 1);
-      RichString_setAttrn(str, attr, n + 1, end - n - 3);
-      RichString_setAttrn(str, shadow, end - 2, 1);
+      RichString_setAttrn(str, attr, n + 1, end - n - 2);
+      RichString_setAttrn(str, shadow, end - 1, 1);
    }
 }
 

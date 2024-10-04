@@ -19,7 +19,7 @@ static const int ProcessingStateMeter_attributes[] = {
    PROCESS_SHADOW, /* waiting */
    PROCESS_THREAD_BASENAME, /* training */
    PROCESS_THREAD_COMM, /* sampling */
-   PROCESS_TAG, /* explaining */
+   PROCESS_COMM, /* explaining */
    PROCESS_TOMB, /* unknown */
 };
 

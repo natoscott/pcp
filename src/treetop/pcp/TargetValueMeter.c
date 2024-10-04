@@ -22,7 +22,7 @@ static const int TargetValueMeter_attributes[] = {
 };
 
 static const char* const TargetValueMeter_captions[] = {
-   "Latest: ",
+   "Currently: ",
    "Lag",
 };
 

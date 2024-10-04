@@ -29,13 +29,35 @@ static void FeaturesMeter_updateValues(Meter* this) {
    this->values[2] = mutual == -1 ? NAN : mutual;
    this->values[3] = missing == -1 ? NAN : missing;
 
-   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuva %zumi %zunan", total, variance, mutual, missing);
+   xSnprintf(this->txtBuffer, sizeof(this->txtBuffer), "%zu %zuva %zumi %zuna", total, variance, mutual, missing);
+}
+
+static void FeaturesMeter_display(const Object* cast, RichString* out) {
+   const Meter* this = (const Meter*)cast;
+   char buffer[20];
+   int len;
+
+   len = xSnprintf(buffer, sizeof(buffer), "%zu", (size_t)this->values[0]);
+   RichString_appendnAscii(out, CRT_colors[METER_TEXT], buffer, len);
+
+   len = xSnprintf(buffer, sizeof(buffer), " %zu", (size_t)this->values[1]);
+   RichString_appendnAscii(out, CRT_colors[METER_SHADOW], buffer, len);
+   RichString_appendAscii(out, CRT_colors[METER_TEXT], "va");
+
+   len = xSnprintf(buffer, sizeof(buffer), " %zu", (size_t)this->values[2]);
+   RichString_appendnAscii(out, CRT_colors[METER_SHADOW], buffer, len);
+   RichString_appendAscii(out, CRT_colors[METER_TEXT], "mi");
+
+   len = xSnprintf(buffer, sizeof(buffer), " %zu", (size_t)this->values[3]);
+   RichString_appendnAscii(out, CRT_colors[METER_SHADOW], buffer, len);
+   RichString_appendAscii(out, CRT_colors[METER_TEXT], "na");
 }
 
 const MeterClass FeaturesMeter_class = {
    .super = {
       .extends = Class(Meter),
-      .delete = Meter_delete
+      .delete = Meter_delete,
+      .display = FeaturesMeter_display,
    },
    .updateValues = FeaturesMeter_updateValues,
    .defaultMode = TEXT_METERMODE,

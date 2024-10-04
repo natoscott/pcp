@@ -57,15 +57,15 @@ static double training_interval = 300;
 
 const ScreenDefaults Platform_defaultScreens[] = {
   { .name = "Model importance",
-    .columns = "MODEL_FEATURE MODEL_IMPORTANCE MODEL_MUTUALINFO",
+    .columns = "MODEL_MUTUALINFO MODEL_IMPORTANCE MODEL_FEATURE",
     .sortKey = "MODEL_MUTUALINFO",
   },
   { .name = "Sample importance",
-    .columns = "LOCAL_FEATURE LOCAL_IMPORTANCE LOCAL_MUTUALINFO",
+    .columns = "LOCAL_MUTUALINFO LOCAL_IMPORTANCE LOCAL_FEATURE",
     .sortKey = "LOCAL_MUTUALINFO",
   },
   { .name = "Optimum importance",
-    .columns = "OPTIM_FEATURE OPTIM_MIN_MAX OPTIM_DIFFERENCE OPTIM_MUTUALINFO",
+    .columns = "OPTIM_MUTUALINFO OPTIM_MIN_MAX OPTIM_DIFFERENCE OPTIM_FEATURE",
     .sortKey = "OPTIM_MUTUALINFO",
   },
 };
@@ -231,11 +231,8 @@ bool Platform_init(void) {
    }
 
    //
-   // TODO: PCP_TMP_DIR for MMV
-   // TODO: exec server.py child process (pass args)
-   // TODO: MMV shared library through local context (server and client)
-   //
-   // but for now, use PMCD:
+   // TODO: PCP_TMP_DIR for MMV -- but for now, use local PMCD not
+   // MMV shared library through local context (server and client)
    //
    int sts;
    opts.context = PM_CONTEXT_HOST;

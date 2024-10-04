@@ -792,10 +792,10 @@ class TreetopServer():
         # use DIFFI anomaly values to find the features contributing most
         rank_df = pd.DataFrame(diffi).sum().nlargest(N, keep='all')
 
-        # dictionary of keys: anomalies-feature_name and values: array of DIFFI scores
+        # dictionary of keys: anomalous-feature_name and values: array of DIFFI scores
         frame = {}
         for i in rank_df.index:   # column index (original features), from ranking
-            key = 'anomalies-' + df.columns[i]
+            key = 'anomalous-' + df.columns[i]
             value = [0] * df.shape[0]   # zero-filled array
             # fill in just the anomaly values now (replacing zeroes)
             for diffi_index, value_index in enumerate(np.where(y_pred_diffi == 1)[0]):
@@ -1195,6 +1195,7 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGHUP, signal_refresh)
     signal.signal(signal.SIGINT, signal_finished)
+    signal.signal(signal.SIGPIPE, signal_finished)
     signal.signal(signal.SIGQUIT, signal_finished)
     signal.signal(signal.SIGTERM, signal_finished)
 

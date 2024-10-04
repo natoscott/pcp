@@ -74,7 +74,7 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
    size_t end, n = sizeof(buffer) - 1;
    const char* name = fp->name;
    char* timestamp;
-   char* anomalies;
+   char* anomalous;
    char* instance;
 
    end = strlen(name);
@@ -86,8 +86,8 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
       n = (size_t)(timestamp - buffer) + 9;
       buffer[n] = ' '; /* 1st hyphen */
    }
-   if ((anomalies = (strstr(buffer, "anomalies-"))) != NULL) {
-      n = (size_t)(anomalies - buffer) + 9;
+   if ((anomalous = (strstr(buffer, "anomalous-"))) != NULL) {
+      n = (size_t)(anomalous - buffer) + 9;
       buffer[n] = ' '; /* 1st hyphen */
    }
    instance = strchr(buffer, '[');
@@ -99,8 +99,8 @@ static void Feature_writeName(const Feature* fp, RichString* str) {
       RichString_setAttrn(str, CRT_colors[DYNAMIC_GRAY], n+10, end);
    }
 
-   if (anomalies) {
-      n = (size_t)(anomalies - buffer);
+   if (anomalous) {
+      n = (size_t)(anomalous - buffer);
       RichString_setAttrn(str, shadow, n, 9);
       RichString_setAttrn(str, CRT_colors[DYNAMIC_YELLOW], n+10, end);
    }

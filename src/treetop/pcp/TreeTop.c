@@ -10,6 +10,7 @@ in the source distribution for its full text.
 #include "pcp/TreeTop.h"
 
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -198,9 +199,9 @@ bool Platform_startServer(void) {
    sts = __pmProcessAddArg(&ctl, "notebooks/server.py"); /*TODO: location? */
    if (sts < 0)
       return false;
-   sts = __pmProcessExec(&ctl, PM_EXEC_TOSS_ALL, 0 /*nowait*/);
+   sts = __pmProcessPipe(&ctl, "r", PM_EXEC_TOSS_ALL, &pcp->server);
    if (sts < 0) {
-      fprintf(stderr, "Cannot setup treetop server: %s\n", pmErrStr(sts));
+      fprintf(stderr, "Cannot start treetop server: %s\n", pmErrStr(sts));
       return false;
    }
 
@@ -308,8 +309,12 @@ void Platform_dynamicScreensDone(Hashtable* screens) {
 }
 
 void Platform_done(void) {
+   signal(SIGTERM, SIG_IGN);
+   killpg(0, SIGTERM);
    MMV_done(pcp->map);
    pmDestroyContext(pcp->context);
+   if (pcp->server)
+       __pmProcessPipeClose(pcp->server);
    if (pcp->result)
       pmFreeResult(pcp->result);
    free(pcp->fetch);

@@ -48,6 +48,7 @@ typedef struct Platform_ {
    struct timeval offset;     /* time offset used in archive mode only */
 
    void* map;                 /* mapped memory for server communication */
+   FILE* server;              /* process pipe file server communication */
    FeatureTable* model_features;     /* important metrics from the ML model */
    FeatureTable* local_features;     /* important SHAP metrics from sample */
    FeatureTable* optim_features;     /* important metrics for optimising */

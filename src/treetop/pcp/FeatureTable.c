@@ -34,7 +34,7 @@ FeatureTable* FeatureTable_new(Machine* host, FeatureTableType type) {
    Object_setClass(this, Class(FeatureTable));
 
    Table* super = &this->super;
-   Table_init(super, Class(Row), host);
+   Table_init(super, Class(Feature), host);
 
    if (type == TABLE_LOCAL_IMPORTANCE)
       this->feature = PCP_LOCAL_FEATURES;

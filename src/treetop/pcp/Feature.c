@@ -40,7 +40,7 @@ Feature* Feature_new(const Machine* host) {
    Feature* this = xCalloc(1, sizeof(Feature));
    Object_setClass(this, Class(Feature));
    Row_init(&this->super, host);
-   return (Feature*)this;
+   return this;
 }
 
 void Feature_done(Feature* this) {
@@ -53,9 +53,32 @@ static void Feature_delete(Object* cast) {
    free(this);
 }
 
-static const char* Feature_name(Row* rp) {
-   Feature* fp = (Feature*) rp;
-   return fp->name;
+static const char* Feature_getName(const Feature* this) {
+   return this->name;
+}
+
+static const char* Feature_getSortKey(const Feature* this) {
+   return Feature_getName(this);
+}
+
+const char* Feature_rowGetSortKey(Row* super) {
+   const Feature* this = (const Feature*) super;
+   assert(Object_isA((const Object*) this, (const ObjectClass*) &Feature_class));
+   return Feature_getSortKey(this);
+}
+
+/* Test whether display must filter out this feature */
+static bool Feature_matchesFilter(const Feature* this, const Table* table) {
+   const char* incFilter = table->incFilter;
+   if (incFilter && !String_contains_i(Feature_getName(this), incFilter, true))
+      return true;
+   return false;
+}
+
+bool Feature_rowMatchesFilter(const Row* super, const Table* table) {
+   const Feature* this = (const Feature*) super;
+   assert(Object_isA((const Object*) this, (const ObjectClass*) &Feature_class));
+   return Feature_matchesFilter(this, table);
 }
 
 static void Feature_writeMinMax(const Feature* fp, RichString* str) {
@@ -179,10 +202,36 @@ static void Feature_writeField(const Row* super, RichString* str, RowField field
    }
 }
 
-static int Feature_compareByKey(const Row* v1, const Row* v2, int key) {
+static int Feature_compare(const void* v1, const void* v2) {
    const Feature* f1 = (const Feature*)v1;
    const Feature* f2 = (const Feature*)v2;
 
+   const ScreenSettings* ss = f1->super.host->settings->ss;
+
+   RowField key = ScreenSettings_getActiveSortKey(ss);
+
+   int result = Feature_compareByKey(f1, f2, key);
+
+   // Implement tie-breaker (needed to make tree mode more stable)
+   if (!result)
+      return SPACESHIP_NUMBER(Feature_getId(f1), Feature_getId(f2));
+
+   return (ScreenSettings_getActiveDirection(ss) == 1) ? result : -result;
+}
+
+int Feature_compareByParent(const Row* r1, const Row* r2) {
+   int result = SPACESHIP_NUMBER(
+      r1->isRoot ? 0 : Row_getGroupOrParent(r1),
+      r2->isRoot ? 0 : Row_getGroupOrParent(r2)
+   );
+
+   if (result != 0)
+      return result;
+
+   return Feature_compare(r1, r2);
+}
+
+int Feature_compareByKey_Base(const Feature* f1, const Feature *f2, RowField key) {
    switch (key) {
    case LOCAL_FEATURE:
    case MODEL_FEATURE:
@@ -200,31 +249,23 @@ static int Feature_compareByKey(const Row* v1, const Row* v2, int key) {
    case OPTIM_MIN_MAX:
       return SPACESHIP_NULLSTR(f1->min_max, f2->min_max);
    default:
-      return Row_compare(v1, v2);
+      CRT_debug("Feature_compareByKey_Base() called with key %d", key);
+      assert(0 && "Feature_compareByKey_Base: default key reached"); /* should never be reached */
+      return SPACESHIP_NUMBER(Feature_getId(f1), Feature_getId(f2));
    }
 }
 
-static int Feature_compare(const void* v1, const void* v2) {
-   const Feature* f1 = (const Feature*)v1;
-   const Feature* f2 = (const Feature*)v2;
-   const ScreenSettings* ss = f1->super.host->settings->ss;
-   RowField key = ScreenSettings_getActiveSortKey(ss);
-   int result = Feature_compareByKey(v1, v2, key);
-
-   // Implement tie-breaker (needed to make tree mode more stable)
-   if (!result)
-      return SPACESHIP_NUMBER(Feature_getId(f1), Feature_getId(f2));
-
-   return (ScreenSettings_getActiveDirection(ss) == 1) ? result : -result;
-}
-
-const RowClass Feature_class = {
+const FeatureClass Feature_class = {
    .super = {
-      .extends = Class(Row),
-      .display = Row_display,
-      .delete = Feature_delete,
-      .compare = Feature_compare,
+      .super = {
+         .extends = Class(Feature),
+         .display = Row_display,
+         .delete = Feature_delete,
+         .compare = Feature_compare,
+      },
+      .matchesFilter = Feature_rowMatchesFilter,
+      .sortKeyString = Feature_rowGetSortKey,
+      .compareByParent = Feature_compareByParent,
+      .writeField = Feature_writeField,
    },
-   .sortKeyString = Feature_name,
-   .writeField = Feature_writeField,
 };

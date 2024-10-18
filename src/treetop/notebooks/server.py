@@ -312,7 +312,7 @@ class TreetopServer():
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),
                               shorttext = "Training interval in seconds"),
                    mmv.mmv_metric(name = "training.window",
-                              item = 61,
+                              item = 62,
                               typeof = MMV_TYPE_DOUBLE,
                               semantics = MMV_SEM_INSTANT,
                               dimension = pmapi.pmUnits(0,1,0,0,PM_TIME_SEC,0),

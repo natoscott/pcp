@@ -1,0 +1,143 @@
+#!/bin/sh
+# PCP QA Test No. 1932
+# Exercise pmseries --gc to remove expired time series ancillary data.
+#
+# Loads a known archive with a very short stream.expire TTL, waits for
+# the stream to expire, then verifies that --gc --dryrun reports the
+# stale series and that --gc removes all ancillary keys.
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+# get standard environment, filters and checks
+. ./common.product
+. ./common.filter
+. ./common.check
+. ./common.keys
+
+_check_series
+
+_cleanup()
+{
+    [ -n "$options" ] && $keys_cli $options shutdown
+    cd $here
+    $sudo rm -rf $tmp $tmp.*
+}
+
+status=1	# failure is the default!
+key_server_port=`_find_free_port`
+options="-p $key_server_port"
+
+trap "_cleanup; exit \$status" 0 1 2 3 15
+
+_filter_source()
+{
+    sed \
+	-e "s,$here,PATH,g" \
+	-e "s,$hostname,QAHOST,g" \
+    #end
+}
+
+_filter_gc_summary()
+{
+    # normalise counts in the summary line
+    sed \
+	-e 's/GC: [0-9]* series scanned, [0-9]* cleaned/GC: N series scanned, N cleaned/' \
+    #end
+}
+
+_count_keys()
+{
+    $keys_cli $options --scan --pattern "$1" 2>/dev/null | wc -l | tr -d ' '
+}
+
+hostname=`pmhostname`
+
+# real QA test starts here
+cat > $tmp.conf <<EOF
+[pmseries]
+stream.expire = 1
+EOF
+
+echo "Start test key server ..."
+$key_server --port $key_server_port --save "" > $tmp.keys 2>&1 &
+_check_key_server_ping $key_server_port
+_check_key_server $key_server_port
+_check_key_server_version $key_server_port
+echo
+
+echo "== load archive (stream.expire=1s)"
+pmseries $options -c $tmp.conf --load "$here/archives/viewqa1" \
+| _filter_source
+echo
+
+# record how many series were loaded
+nseries=`_count_keys "pcp:desc:series:*"`
+echo "== series loaded: $nseries"
+[ "$nseries" -gt 0 ] || _fail "No series loaded from archive"
+
+nmetric_sets=`_count_keys "pcp:series:metric.name:*"`
+echo "== metric.name forward sets: $nmetric_sets"
+echo
+
+echo "== wait 2s for stream TTL to expire"
+pmsleep 2
+
+streams_remaining=`_count_keys "pcp:values:series:*"`
+echo "== stream keys after TTL: $streams_remaining"
+[ "$streams_remaining" -eq 0 ] || _fail "Streams still present after TTL elapsed"
+
+desc_remaining=`_count_keys "pcp:desc:series:*"`
+echo "== desc keys still present (pre-GC): $desc_remaining"
+[ "$desc_remaining" -eq "$nseries" ] \
+    || _fail "Expected $nseries desc keys, got $desc_remaining"
+echo
+
+echo "== dryrun: count stale series reported"
+ndryrun=`pmseries $options -c $tmp.conf --gc --dryrun 2>&1 \
+    | grep -c "GC dryrun:"`
+echo "dryrun reported $ndryrun stale series"
+[ "$ndryrun" -eq "$nseries" ] \
+    || _fail "dryrun reported $ndryrun series, expected $nseries"
+
+echo "== dryrun summary line"
+pmseries $options -c $tmp.conf --gc --dryrun 2>&1 \
+    | grep "GC:" \
+    | tail -1 \
+    | _filter_gc_summary
+echo
+
+# dryrun must not have removed anything
+desc_after_dryrun=`_count_keys "pcp:desc:series:*"`
+echo "== desc keys unchanged after dryrun: $desc_after_dryrun"
+[ "$desc_after_dryrun" -eq "$nseries" ] \
+    || _fail "Dryrun removed $((nseries - desc_after_dryrun)) keys unexpectedly"
+echo
+
+echo "== gc: remove stale series"
+pmseries $options -c $tmp.conf --gc 2>&1 | _filter_gc_summary
+echo
+
+echo "== desc series keys after gc"
+desc_final=`_count_keys "pcp:desc:series:*"`
+[ "$desc_final" -eq 0 ] && echo "0 (all cleaned)" \
+    || _fail "$desc_final desc keys remain after GC"
+
+echo "== metric.name forward sets after gc"
+metric_final=`_count_keys "pcp:series:metric.name:*"`
+[ "$metric_final" -eq 0 ] && echo "0 (all cleaned)" \
+    || _fail "$metric_final pcp:series:metric.name:* sets remain"
+
+echo "== label forward sets after gc"
+label_final=`_count_keys "pcp:series:label.*"`
+[ "$label_final" -eq 0 ] && echo "0 (all cleaned)" \
+    || _fail "$label_final pcp:series:label.* sets remain"
+
+echo "== all done"
+
+# success, all done
+status=0
+exit

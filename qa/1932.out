@@ -1,0 +1,30 @@
+QA output created by 1932
+Start test key server ...
+
+== load archive (stream.expire=1s)
+PATH/archives/viewqa1 (QAHOST)
+
+== series loaded: 11
+== metric.name forward sets: 11
+
+== wait 2s for stream TTL to expire
+== stream keys after TTL: 0
+== desc keys still present (pre-GC): 11
+
+== dryrun: count stale series reported
+dryrun reported 11 stale series
+== dryrun summary line
+pmseries: [Info] GC: N series scanned, N cleaned
+
+== desc keys unchanged after dryrun: 11
+
+== gc: remove stale series
+pmseries: [Info] GC: N series scanned, N cleaned
+
+== desc series keys after gc
+0 (all cleaned)
+== metric.name forward sets after gc
+0 (all cleaned)
+== label forward sets after gc
+0 (all cleaned)
+== all done

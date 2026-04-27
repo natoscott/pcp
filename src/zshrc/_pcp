@@ -831,6 +831,8 @@ _pcp () {
       "(-h --host $exargs)"{-h+,--host=}'[specify Redis host]:host:_hosts' \
       "(-p --port $exargs)"{-p+,--port=}'[specify Redis port]:port:' \
       "(-L --load $exargs)"{-L,--load}'[load metadata and data into Redis]:path:_files' \
+      "(-G --gc $exargs)"{-G,--gc}'[garbage collect expired time series]' \
+      "(-N --dryrun $exargs)"{-N,--dryrun}'[with --gc, log what would be removed without writing]' \
       "(-q --query $exargs)"{-q,--query}'[perform timeseries query]' \
       "(-a --all $exargs)"{-a,--all}'[report all metadata, same as -dilms]' \
       "(-D --debug $exargs)"{-D,--debug}'[set debug options]:options:->debug_opts' \

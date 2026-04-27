@@ -1,0 +1,32 @@
+QA output created by 1938
+== --dryrun without --gc is rejected
+error - --dryrun requires --gc
+
+== --gc with --load is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --query is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --values is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --window is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --desc is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --labels is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --metrics is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --instances is rejected
+error - cannot combine --gc with other operation options
+
+== --gc with --sources is rejected
+error - cannot combine --gc with other operation options
+
+== all done

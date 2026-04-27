@@ -2342,8 +2342,10 @@ suse
 1927 pmda.sockets local
 1929 pmrep local
 1931 pmda.bpf local
+1932 pmseries libpcp_web local
 1936 other local pmclient
 1937 pmlogrewrite pmda.xfs local pmlogdump
+1938 pmseries local
 1940 pmlogconf valgrind local
 1942 pmda.opentelemetry local python
 1948 pmda.opentelemetry local python not_in_qa_farm

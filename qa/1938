@@ -1,0 +1,87 @@
+#!/bin/sh
+# PCP QA Test No. 1938
+# Exercise pmseries --gc option validation.
+#
+# Checks that --gc and --dryrun are mutually exclusive with other
+# operation modes, and that --dryrun requires --gc.
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+# get standard environment, filters and checks
+. ./common.product
+. ./common.filter
+. ./common.check
+. ./common.keys
+
+_check_key_server
+
+_cleanup()
+{
+    cd $here
+    _restore_config $PCP_SYSCONF_DIR/pmseries
+    $sudo rm -rf $tmp $tmp.*
+}
+
+status=1	# failure is the default!
+trap "_cleanup; exit \$status" 0 1 2 3 15
+
+_save_config $PCP_SYSCONF_DIR/pmseries
+$sudo rm -f $PCP_SYSCONF_DIR/pmseries/*
+
+# filter usage block; only keep the pmseries: error/warning lines
+_filter_errs()
+{
+    grep "^pmseries:" | sed 's/^pmseries: //'
+}
+
+# real QA test starts here
+
+echo "== --dryrun without --gc is rejected"
+pmseries --dryrun 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --load is rejected"
+pmseries --gc --load /dev/null 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --query is rejected"
+pmseries --gc --query 'kernel.all.load' 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --values is rejected"
+pmseries --gc --values 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --window is rejected"
+pmseries --gc --window 'start=-1h' 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --desc is rejected"
+pmseries --gc --desc 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --labels is rejected"
+pmseries --gc --labels 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --metrics is rejected"
+pmseries --gc --metrics 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --instances is rejected"
+pmseries --gc --instances 2>&1 | _filter_errs
+echo
+
+echo "== --gc with --sources is rejected"
+pmseries --gc --sources 2>&1 | _filter_errs
+echo
+
+echo "== all done"
+
+# success, all done
+status=0
+exit

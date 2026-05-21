@@ -731,6 +731,26 @@ NOTE: Timeseries loading is
 entries (defined in
 .IR $PCP_SYSCONF_DIR/pmseries/pmseries.conf )
 are loaded for a given metric, the oldest entries are dropped.
+.PP
+NOTE: Automatic garbage collection of expired series can be scheduled when
+running as part of
+.BR pmproxy (1).
+Setting
+.B series.gc.interval
+in
+.I $PCP_SYSCONF_DIR/pmseries/pmseries.conf
+to a non-zero value (seconds) causes pmproxy to run
+.B \-\-gc
+automatically on that interval.
+Three
+.BR mmv (5)
+metrics in the
+.B pmproxy.series
+namespace track GC activity:
+.BR series.gc.calls ,
+.B series.gc.scanned
+and
+.BR series.gc.cleaned .
 .SH OPTIONS
 The available command line options, in addition to timeseries
 metadata and sources options described above, are:

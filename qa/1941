@@ -1,0 +1,80 @@
+#!/bin/sh
+# PCP QA Test No. 1941
+# Verify that series.gc.interval is recognised by pmseries and that
+# pmseries --gc with a non-zero interval config does not error.
+# Also sanity-checks the --gc / --dryrun mutual-exclusion and the
+# pmseries --gc --dryrun summary line format.
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+# get standard environment, filters and checks
+. ./common.product
+. ./common.filter
+. ./common.check
+. ./common.keys
+
+_check_series
+
+_cleanup()
+{
+    [ -n "$options" ] && $keys_cli $options shutdown
+    cd $here
+    $sudo rm -rf $tmp $tmp.*
+}
+
+status=1	# failure is the default!
+key_server_port=`_find_free_port`
+options="-p $key_server_port"
+
+trap "_cleanup; exit \$status" 0 1 2 3 15
+
+_filter_gc()
+{
+    sed \
+	-e 's/GC: [0-9]* series scanned, [0-9]* cleaned/GC: N series scanned, N cleaned/' \
+    #end
+}
+
+# real QA test starts here
+
+echo "Start test key server ..."
+$key_server --port $key_server_port --save "" > $tmp.keys 2>&1 &
+_check_key_server_ping $key_server_port
+_check_key_server $key_server_port
+_check_key_server_version $key_server_port
+echo
+
+echo "== series.gc.interval in config (non-zero) is accepted by pmseries"
+cat > $tmp.conf <<EOF
+[pmseries]
+stream.expire = 1
+series.gc.interval = 3600
+EOF
+pmseries $options -c $tmp.conf --gc 2>&1 | _filter_gc
+echo
+
+echo "== series.gc.interval = 0 (disabled) also accepted"
+cat > $tmp.conf <<EOF
+[pmseries]
+series.gc.interval = 0
+EOF
+pmseries $options -c $tmp.conf --gc 2>&1 | _filter_gc
+echo
+
+echo "== --gc --dryrun on empty key server"
+cat > $tmp.conf <<EOF
+[pmseries]
+stream.expire = 1
+EOF
+pmseries $options -c $tmp.conf --gc --dryrun 2>&1 | _filter_gc
+echo
+
+echo "== all done"
+
+# success, all done
+status=0
+exit

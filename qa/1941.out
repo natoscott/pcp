@@ -1,0 +1,13 @@
+QA output created by 1941
+Start test key server ...
+
+== series.gc.interval in config (non-zero) is accepted by pmseries
+pmseries: [Info] GC: N series scanned, N cleaned
+
+== series.gc.interval = 0 (disabled) also accepted
+pmseries: [Info] GC: N series scanned, N cleaned
+
+== --gc --dryrun on empty key server
+pmseries: [Info] GC: N series scanned, N cleaned
+
+== all done

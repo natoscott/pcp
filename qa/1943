@@ -1,0 +1,135 @@
+#!/bin/sh
+# PCP QA Test No. 1943
+# Exercise pmseries --gc via pmproxy: verify that the series.gc.*
+# MMV metrics exist and are updated correctly after a GC run.
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+# get standard environment, filters and checks
+. ./common.product
+. ./common.filter
+. ./common.check
+. ./common.keys
+
+_check_series
+which curl >/dev/null 2>&1 || _notrun "curl not installed"
+
+_cleanup()
+{
+    [ -n "$pmproxy_pid" ] && $signal -s TERM $pmproxy_pid
+    [ -n "$options" ] && $keys_cli $options shutdown
+    if $need_restore
+    then
+	need_restore=false
+        _restore_config $PCP_SYSCONF_DIR/pmproxy
+        _restore_config $PCP_SYSCONF_DIR/pmseries
+    fi
+    $sudo rm -rf $tmp $tmp.*
+}
+
+status=1	# failure is the default!
+signal=$PCP_BINADM_DIR/pmsignal
+username=`id -u -n`
+hostname=`pmhostname`
+
+need_restore=false
+trap "_cleanup; exit \$status" 0 1 2 3 15
+
+_filter_source()
+{
+    sed \
+	-e "s,$here,PATH,g" \
+	-e "s,$hostname,QAHOST,g" \
+    #end
+}
+
+_filter_gc_metric()
+{
+    # normalise counter values to YES/NO existence check
+    awk '
+	/series\.gc\.(calls|scanned|cleaned)/ { found=1; next }
+	END { print (found ? "series.gc metrics: found" : "series.gc metrics: MISSING") }
+    '
+}
+
+# real QA test starts here
+_save_config $PCP_SYSCONF_DIR/pmproxy
+_save_config $PCP_SYSCONF_DIR/pmseries
+$sudo rm -f $PCP_SYSCONF_DIR/pmproxy/*
+$sudo rm -f $PCP_SYSCONF_DIR/pmseries/*
+need_restore=true
+
+echo "Start test key server ..."
+key_server_port=`_find_free_port`
+options="-p $key_server_port"
+$key_server --port $key_server_port --save "" > $tmp.keys 2>&1 &
+_check_key_server_ping $key_server_port
+_check_key_server $key_server_port
+_check_key_server_version $key_server_port
+echo
+
+# configure pmseries with short stream.expire so data expires quickly
+cat >$tmp.pmseries.conf <<EOF
+[pmseries]
+stream.expire = 1
+EOF
+$sudo cp $tmp.pmseries.conf $PCP_SYSCONF_DIR/pmseries/pmseries.conf
+
+# load some test data
+echo "== load archive"
+pmseries $options -c $tmp.pmseries.conf \
+    --load "$here/archives/viewqa1" | _filter_source
+echo
+
+# start pmproxy connected to the test key server
+cat >$tmp.pmproxy.conf <<EOF
+[pmproxy]
+pcp.enabled = true
+[pmseries]
+enabled = true
+EOF
+proxyport=`_find_free_port`
+proxyopts="-p $proxyport -r $key_server_port -t"
+pmproxy -f -U $username \
+    -c $tmp.pmproxy.conf \
+    -x $seq_full -l $tmp.pmproxy.log $proxyopts &
+pmproxy_pid=$!
+pmcd_wait -h localhost@localhost:$proxyport -v -t 5sec
+
+echo "== verify series.gc MMV metrics visible via pmproxy"
+pminfo -f -h localhost@localhost:$proxyport \
+    pmproxy.series.gc.calls \
+    pmproxy.series.gc.scanned \
+    pmproxy.series.gc.cleaned 2>&1 | _filter_gc_metric
+echo
+
+echo "== wait 2s for stream TTL to expire"
+pmsleep 2
+
+echo "== run gc and check summary line"
+pmseries $options -c $tmp.pmseries.conf --gc 2>&1 \
+    | grep "GC:" \
+    | sed 's/GC: [0-9]* series scanned, [0-9]* cleaned/GC: N series scanned, N cleaned/'
+echo
+
+# check gc.calls incremented (should be at least 1 after explicit --gc)
+echo "== verify series.gc.calls > 0 after manual gc"
+calls=`pmseries $options -c $tmp.pmseries.conf \
+    --load "$here/archives/viewqa1" 2>/dev/null; \
+    pmseries $options -c $tmp.pmseries.conf --gc 2>/dev/null; \
+    pminfo -f -h localhost@localhost:$proxyport pmproxy.series.gc.calls 2>/dev/null \
+    | awk '/value/ { print $2; exit }'`
+[ -n "$calls" ] && [ "$calls" -gt 0 ] \
+    && echo "series.gc.calls > 0: yes" \
+    || echo "series.gc.calls > 0: no (value=$calls)"
+echo
+
+cat $tmp.pmproxy.log >> $seq_full
+echo "== all done"
+
+status=0
+exit

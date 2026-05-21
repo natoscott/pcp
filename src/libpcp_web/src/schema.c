@@ -28,9 +28,11 @@
 extern sds		cursorcount;
 static sds		maxstreamlen;
 static sds		streamexpire;
+static sds		gcinterval;
 static sds		DEFAULT_CURSORCOUNT;
 static sds		DEFAULT_MAXSTREAMLEN;
 static sds		DEFAULT_STREAMEXPIRE;
+static sds		DEFAULT_GCINTERVAL;
 
 static void
 initKeySlotsBaton(keySlotsBaton *baton,
@@ -1591,6 +1593,13 @@ keysSeriesInit(struct dict *config)
 	else	/* default value: 1 day (without changes) */
 	    streamexpire = DEFAULT_STREAMEXPIRE = sdsnew("86400");
     }
+
+    if (!gcinterval) {
+	if ((option = pmIniFileLookup(config, "pmseries", "series.gc.interval")))
+	    gcinterval = option;
+	else	/* default: disabled (0) */
+	    gcinterval = DEFAULT_GCINTERVAL = sdsnew("0");
+    }
 }
 
 static void
@@ -1607,6 +1616,10 @@ keysSeriesClose(void)
     if (DEFAULT_STREAMEXPIRE) {
 	sdsfree(DEFAULT_STREAMEXPIRE);
 	DEFAULT_STREAMEXPIRE = NULL;
+    }
+    if (DEFAULT_GCINTERVAL) {
+	sdsfree(DEFAULT_GCINTERVAL);
+	DEFAULT_GCINTERVAL = NULL;
     }
 }
 
@@ -1729,6 +1742,65 @@ pmSeriesSetupMetrics(pmSeriesModule *module)
 						"gc.cleaned", NULL);
 }
 
+/* Forward declarations for GC functions used by the timer */
+static seriesGCBaton *initSeriesGCBaton(keySlots *, seriesModuleData *,
+		pmLogInfoCallBack, pmSeriesDoneCallBack, int, void *);
+static void keys_series_gc_scan(seriesGCBaton *);
+
+/*
+ * Timer-driven GC: fires every series.gc.interval seconds via pmWebTimerRegister.
+ */
+typedef struct seriesGCTimerData {
+    seriesModuleData	*data;
+    unsigned long	interval_sec;
+    unsigned long	ticks;		/* elapsed 1-second ticks */
+    int			running;	/* prevent overlapping runs */
+} seriesGCTimerData;
+
+static void
+series_gc_timer_info(pmLogLevel level, sds msg, void *arg)
+{
+    (void)arg;
+    if (level >= PMLOG_ERROR)
+	pmNotifyErr(LOG_ERR, "GC: %s", msg);
+    else if (level >= PMLOG_WARNING)
+	pmNotifyErr(LOG_WARNING, "GC: %s", msg);
+    else
+	pmNotifyErr(LOG_INFO, "GC: %s", msg);
+}
+
+static void
+series_gc_timer_done(int status, void *arg)
+{
+    seriesGCTimerData	*td = (seriesGCTimerData *)arg;
+
+    (void)status;
+    if (td)
+	td->running = 0;
+}
+
+static void
+series_gc_timer_callback(void *arg)
+{
+    seriesGCTimerData	*td = (seriesGCTimerData *)arg;
+    seriesGCBaton	*baton;
+
+    if (++td->ticks < td->interval_sec)
+	return;
+    td->ticks = 0;
+
+    if (td->running || td->data == NULL || td->data->slots == NULL)
+	return;
+
+    if ((baton = initSeriesGCBaton(td->data->slots, td->data,
+		    series_gc_timer_info, series_gc_timer_done,
+		    0, td)) == NULL)
+	return;
+
+    td->running = 1;
+    keys_series_gc_scan(baton);
+}
+
 int
 pmSeriesSetup(pmSeriesModule *module, void *arg)
 {
@@ -1767,6 +1839,22 @@ pmSeriesSetup(pmSeriesModule *module, void *arg)
 
     pmSeriesSetupMetrics(module);
 
+    /* register automatic GC timer if series.gc.interval is configured and > 0 */
+    {
+	unsigned long		interval;
+	seriesGCTimerData	*td;
+
+	interval = gcinterval ? strtoul(gcinterval, NULL, 10) : 0;
+	if (interval > 0) {
+	    if ((td = calloc(1, sizeof(seriesGCTimerData))) != NULL) {
+		td->data = data;
+		td->interval_sec = interval;
+		pmWebTimerRegister(series_gc_timer_callback, td);
+		/* td intentionally not freed: lives for the process lifetime */
+	    }
+	}
+    }
+
     return 0;
 }
 
@@ -1785,13 +1873,13 @@ pmSeriesSetup(pmSeriesModule *module, void *arg)
  * ============================================================
  */
 
-/* Forward declarations */
-static void keys_series_gc_scan(seriesGCBaton *);
+/* Forward declaration for sweep (scan is declared near the timer above) */
 static void keys_series_gc_sweep(seriesGCEntry *);
 
 static seriesGCBaton *
 initSeriesGCBaton(keySlots *slots, seriesModuleData *data,
-		pmSeriesSettings *settings, int dryrun, void *arg)
+		pmLogInfoCallBack info, pmSeriesDoneCallBack done,
+		int dryrun, void *userdata)
 {
     seriesGCBaton	*baton;
 
@@ -1802,9 +1890,9 @@ initSeriesGCBaton(keySlots *slots, seriesModuleData *data,
     baton->module	= data;
     baton->cursor	= sdsnew("0");
     baton->dryrun	= dryrun;
-    baton->info		= settings->module.on_info;
-    baton->done		= settings->callbacks.on_done;
-    baton->userdata	= arg;
+    baton->info		= info;
+    baton->done		= done;
+    baton->userdata	= userdata;
     return baton;
 }
 
@@ -2147,7 +2235,7 @@ keys_series_gc_sweep(seriesGCEntry *entry)
 	    continue;
 	}
 	ictx->entry = entry;
-	strncpy(ictx->ih_hex, hexbuf, sizeof(ictx->ih_hex) - 1);
+	memcpy(ictx->ih_hex, hexbuf, sizeof(ictx->ih_hex));
 
 	key = sdscatfmt(sdsempty(), "pcp:inst:series:%s", hexbuf);
 	cmd = resp_command(3);
@@ -2497,7 +2585,9 @@ pmSeriesGC(pmSeriesSettings *settings, pmSeriesFlags flags, void *arg)
 	return -ENOTCONN;
 
     dryrun = (flags & PM_SERIES_FLAG_DRYRUN) ? 1 : 0;
-    if ((baton = initSeriesGCBaton(data->slots, data, settings, dryrun, arg)) == NULL)
+    if ((baton = initSeriesGCBaton(data->slots, data,
+		    settings->module.on_info, settings->callbacks.on_done,
+		    dryrun, arg)) == NULL)
 	return -ENOMEM;
 
     /* keys_series_gc_scan adds its own ref; no extra ref needed here */

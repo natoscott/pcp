@@ -230,6 +230,9 @@ typedef struct seriesGCBaton {
     pmLogInfoCallBack	info;
     pmSeriesDoneCallBack done;
     void		*userdata;
+    /* sources whose last series was removed this run (for discover cleanup) */
+    unsigned char	(*gone_sources)[20];
+    unsigned int	ngone_sources;
 } seriesGCBaton;
 
 /*

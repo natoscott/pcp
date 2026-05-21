@@ -21,12 +21,20 @@
 #include "schema.h"
 #include "util.h"
 
-void initSeriesLoadBaton(seriesLoadBaton *, void *, pmSeriesFlags, 
+void initSeriesLoadBaton(seriesLoadBaton *, void *, pmSeriesFlags,
 	pmLogInfoCallBack, pmSeriesDoneCallBack, keySlots *, void *);
 void freeSeriesLoadBaton(seriesLoadBaton *);
 
 void initSeriesGetContext(seriesGetContext *, void *);
 void freeSeriesGetContext(seriesGetContext *, int);
+
+/*
+ * Source hash → pmDiscover * mapping for GC-triggered context_t cleanup.
+ * Keyed by the 20-byte binary source hash (cp->name.hash).
+ * Lifecycle: populated by pmSeriesDiscoverSource, removed by
+ * pmSeriesDiscoverClosed, consumed by series_gc_discover_cleanup.
+ */
+static dict *gc_sources;
 
 static void server_cache_window(void *);
 
@@ -1304,6 +1312,17 @@ pmSeriesDiscoverSource(pmDiscoverEvent *event, void *arg)
     pmwebapi_setup_context(cp);
     set_source_origin(cp);
 
+    /* register for GC-triggered context cleanup */
+    if (gc_sources == NULL)
+	gc_sources = dictCreate(&sdsKeyDictCallBacks);
+    if (gc_sources) {
+	sds key = sdsnewlen(cp->name.hash, 20);
+	if (key) {
+	    dictDelete(gc_sources, key);	/* avoid stale entry on reconnect */
+	    dictAdd(gc_sources, key, p);
+	}
+    }
+
     /* ordering of async operations */
     i = 0;
     baton->current = &baton->phases[i];
@@ -1322,12 +1341,74 @@ void
 pmSeriesDiscoverClosed(pmDiscoverEvent *event, void *arg)
 {
     pmDiscover		*p = (pmDiscover *)event->data;
-    seriesLoadBaton	*baton = p ? p->baton : NULL; 
+    seriesLoadBaton	*baton = p ? p->baton : NULL;
+    context_t		*cp;
+    sds			 key;
 
     (void)arg;
 
+    /* deregister from GC source map */
+    if (p && gc_sources) {
+	cp = &baton->pmapi.context;
+	key = sdsnewlen(cp->name.hash, 20);
+	if (key) {
+	    dictDelete(gc_sources, key);
+	    sdsfree(key);
+	}
+    }
+
     /* release pmSeriesDiscoverSource reference on load and context batons */
     doneSeriesLoadBaton(baton, "pmSeriesDiscoverSource");
+}
+
+/*
+ * Called from doneSeriesGCBaton when all series for a source have been removed.
+ * Releases the seriesLoadBaton (and embedded context_t with its five dicts) for
+ * each source whose series streams expired and have now been fully GC'd.
+ * Also marks DISCOVER_FLAGS_DELETED so the discover scan stops watching the source.
+ */
+void
+series_gc_discover_cleanup(seriesModuleData *sdata,
+		unsigned char (*hashes)[20], unsigned int nhashes)
+{
+    pmDiscover		*p;
+    seriesLoadBaton	*baton;
+    dictEntry		*entry;
+    sds			 key;
+    unsigned int	 i;
+
+    (void)sdata;
+
+    if (gc_sources == NULL)
+	return;
+
+    for (i = 0; i < nhashes; i++) {
+	key = sdsnewlen(hashes[i], 20);
+	if (key == NULL)
+	    continue;
+
+	entry = dictFind(gc_sources, key);
+	sdsfree(key);
+	if (entry == NULL)
+	    continue;
+
+	p = (pmDiscover *)dictGetVal(entry);
+	if (p == NULL)
+	    continue;
+
+	baton = (seriesLoadBaton *)p->baton;
+
+	if (pmDebugOptions.series)
+	    fprintf(stderr, "GC: releasing discover context for source %s\n",
+		    p->context.name ? p->context.name : "(unknown)");
+
+	/* stop fs monitoring for this source */
+	p->flags |= DISCOVER_FLAGS_DELETED;
+
+	/* release the context_t and its five dicts */
+	if (baton)
+	    doneSeriesLoadBaton(baton, "series_gc_discover_cleanup");
+    }
 }
 
 void

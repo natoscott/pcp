@@ -1747,6 +1747,10 @@ static seriesGCBaton *initSeriesGCBaton(keySlots *, seriesModuleData *,
 		pmLogInfoCallBack, pmSeriesDoneCallBack, int, void *);
 static void keys_series_gc_scan(seriesGCBaton *);
 
+/* Defined in load.c — releases context_t for stale discover sources */
+extern void series_gc_discover_cleanup(seriesModuleData *data,
+		unsigned char (*hashes)[20], unsigned int nhashes);
+
 /*
  * Timer-driven GC: fires every series.gc.interval seconds via pmWebTimerRegister.
  */
@@ -1900,6 +1904,7 @@ static void
 freeSeriesGCBaton(seriesGCBaton *baton)
 {
     sdsfree(baton->cursor);
+    free(baton->gone_sources);
     memset(baton, 0, sizeof(*baton));
     free(baton);
 }
@@ -1924,6 +1929,12 @@ doneSeriesGCBaton(seriesGCBaton *baton, const char *caller)
 	infofmt(msg, "GC: %u series scanned, %u cleaned",
 		baton->nscanned, baton->ncleaned);
 	batoninfo(baton, PMLOG_INFO, msg);
+
+	/* release context_t for sources whose last series was removed */
+	if (baton->ngone_sources > 0 && data != NULL)
+	    series_gc_discover_cleanup(data, baton->gone_sources,
+				      baton->ngone_sources);
+
 	baton->done(0, baton->userdata);
 	freeSeriesGCBaton(baton);
     }
@@ -2236,6 +2247,7 @@ typedef struct {
     seriesGCEntry	*entry;
     unsigned int	 npending;	/* SREMs or EXISTS checks in flight */
     unsigned int	 ncids;		/* number of CIDs stored */
+    unsigned int	 ngone;		/* CIDs whose sets became empty */
     unsigned char	 cid_bins[SERIES_GC_MAX_CIDS][20];
     char		 cid_hexes[SERIES_GC_MAX_CIDS][42];
 } seriesGCCtxCtx;
@@ -2261,10 +2273,28 @@ keys_series_gc_ctx_exists_callback(keyClusterAsyncContext *c, void *r, void *arg
 	    keyMapDelete(contextmap, cid_sds);
 	    sdsfree(cid_sds);
 	}
+	ctx->ngone++;
     }
     free(ec);
 
     if (--ctx->npending == 0) {
+	/*
+	 * If ALL context name sets for this source became empty, record the
+	 * source hash in the parent baton so doneSeriesGCBaton can signal the
+	 * discover layer to release the context_t for this source.
+	 */
+	if (ctx->ngone == ctx->ncids && ctx->ncids > 0 && !entry->dryrun) {
+	    seriesGCBaton		*baton = entry->parent;
+	    unsigned char		(*grown)[20];
+	    unsigned int		 n = baton->ngone_sources;
+
+	    grown = realloc(baton->gone_sources, (n + 1) * sizeof(*grown));
+	    if (grown != NULL) {
+		baton->gone_sources = grown;
+		memcpy(baton->gone_sources[n], entry->context_hash, 20);
+		baton->ngone_sources++;
+	    }
+	}
 	free(ctx);
 	doneSeriesGCEntry(entry, "keys_series_gc_ctx_exists_callback");
     }

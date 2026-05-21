@@ -1995,13 +1995,157 @@ keys_series_gc_done_callback(keyClusterAsyncContext *c, void *r, void *arg)
 }
 
 /*
- * Per-instance context for the HGET → SREM → EXISTS → (DEL) chain.
+ * Per-metric context for the SREM → EXISTS → (namesmap delete) chain.
+ */
+typedef struct {
+    seriesGCEntry	*entry;
+    sds			 mid_bin;	/* 20-byte SHA1 — namesmap key */
+    char		 mid_hex[42];	/* hex form for EXISTS key */
+} seriesGCMetricCtx;
+
+static void
+keys_series_gc_metric_exists_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCMetricCtx	*ctx = (seriesGCMetricCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    respReply		*reply = r;
+
+    if (reply && reply->type == RESP_REPLY_INTEGER && reply->integer == 0)
+	keyMapDelete(namesmap, ctx->mid_bin);	/* set gone; orphan in namesmap */
+
+    sdsfree(ctx->mid_bin);
+    free(ctx);
+    doneSeriesGCEntry(entry, "keys_series_gc_metric_exists_callback");
+}
+
+static void
+keys_series_gc_metric_srem_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCMetricCtx	*ctx = (seriesGCMetricCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    sds			 cmd, key;
+
+    key = sdscatfmt(sdsempty(), "pcp:series:metric.name:%s", ctx->mid_hex);
+    cmd = resp_command(2);
+    cmd = resp_param_str(cmd, EXISTS, EXISTS_LEN);
+    cmd = resp_param_sds(cmd, key);
+    sdsfree(key);
+    keySlotsRequestFirstNode(entry->slots, cmd,
+		    keys_series_gc_metric_exists_callback, ctx);
+    sdsfree(cmd);
+}
+
+/*
+ * Per-instance context for the HGET → SREM → EXISTS → (DEL + instmap delete) chain.
  */
 typedef struct {
     seriesGCEntry	*entry;
     char		 ih_hex[42];	/* instance name.hash in hex */
     char		 iid_hex[42];	/* instance name.id in hex (filled by HGET) */
+    unsigned char	 iid_bin[20];	/* instance name.id binary (for instmap key) */
 } seriesGCInstCtx;
+
+/*
+ * Per-label context for the SREM → EXISTS → HDEL → HLEN → (DEL + labelsmap delete) chain.
+ */
+typedef struct {
+    seriesGCEntry	*entry;
+    sds			 ln_bin;	/* 20-byte SHA1 — labelsmap key */
+    char		 ln_hex[42];	/* label name.id hex (for map key names) */
+    sds			 lv_bin;	/* 20-byte SHA1 — field for HDEL */
+} seriesGCLabelCtx;
+
+static void
+keys_series_gc_label_hlen_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCLabelCtx	*ctx = (seriesGCLabelCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    respReply		*reply = r;
+    sds			 cmd, key;
+
+    if (reply && reply->type == RESP_REPLY_INTEGER && reply->integer == 0) {
+	/* label value map is empty; delete it from key server and labelsmap */
+	key = sdscatfmt(sdsempty(), "pcp:map:label.%s.value", ctx->ln_hex);
+	cmd = resp_command(2);
+	cmd = resp_param_str(cmd, DEL, DEL_LEN);
+	cmd = resp_param_sds(cmd, key);
+	sdsfree(key);
+	keyMapDelete(labelsmap, ctx->ln_bin);
+	keySlotsRequestFirstNode(entry->slots, cmd,
+			keys_series_gc_done_callback, entry);
+	sdsfree(cmd);
+    } else {
+	doneSeriesGCEntry(entry, "keys_series_gc_label_hlen_callback");
+    }
+    sdsfree(ctx->ln_bin);
+    sdsfree(ctx->lv_bin);
+    free(ctx);
+}
+
+static void
+keys_series_gc_label_hdel_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCLabelCtx	*ctx = (seriesGCLabelCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    sds			 cmd, key;
+
+    /* check if the label value map is now empty */
+    key = sdscatfmt(sdsempty(), "pcp:map:label.%s.value", ctx->ln_hex);
+    cmd = resp_command(2);
+    cmd = resp_param_str(cmd, HLEN, HLEN_LEN);
+    cmd = resp_param_sds(cmd, key);
+    sdsfree(key);
+    keySlotsRequestFirstNode(entry->slots, cmd,
+		    keys_series_gc_label_hlen_callback, ctx);
+    sdsfree(cmd);
+}
+
+static void
+keys_series_gc_label_exists_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCLabelCtx	*ctx = (seriesGCLabelCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    respReply		*reply = r;
+    sds			 cmd, key;
+
+    if (reply && reply->type == RESP_REPLY_INTEGER && reply->integer == 0) {
+	/* forward set gone; HDEL the label value from the map hash */
+	key = sdscatfmt(sdsempty(), "pcp:map:label.%s.value", ctx->ln_hex);
+	cmd = resp_command(3);
+	cmd = resp_param_str(cmd, HDEL, HDEL_LEN);
+	cmd = resp_param_sds(cmd, key);
+	cmd = resp_param_sds(cmd, ctx->lv_bin);	/* binary field name */
+	sdsfree(key);
+	keySlotsRequestFirstNode(entry->slots, cmd,
+			keys_series_gc_label_hdel_callback, ctx);
+	sdsfree(cmd);
+    } else {
+	sdsfree(ctx->ln_bin);
+	sdsfree(ctx->lv_bin);
+	free(ctx);
+	doneSeriesGCEntry(entry, "keys_series_gc_label_exists_callback");
+    }
+}
+
+static void
+keys_series_gc_label_srem_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCLabelCtx	*ctx = (seriesGCLabelCtx *)arg;
+    seriesGCEntry	*entry = ctx->entry;
+    sds			 cmd, key;
+    char		 nhex[42], vhex[42];
+
+    pmwebapi_hash_str((unsigned char *)ctx->ln_bin, nhex, sizeof(nhex));
+    pmwebapi_hash_str((unsigned char *)ctx->lv_bin, vhex, sizeof(vhex));
+    key = sdscatfmt(sdsempty(), "pcp:series:label.%s.value:%s", nhex, vhex);
+    cmd = resp_command(2);
+    cmd = resp_param_str(cmd, EXISTS, EXISTS_LEN);
+    cmd = resp_param_sds(cmd, key);
+    sdsfree(key);
+    keySlotsRequestFirstNode(entry->slots, cmd,
+		    keys_series_gc_label_exists_callback, ctx);
+    sdsfree(cmd);
+}
 
 static void
 keys_series_gc_inst_exists_callback(keyClusterAsyncContext *c, void *r, void *arg)
@@ -2012,7 +2156,13 @@ keys_series_gc_inst_exists_callback(keyClusterAsyncContext *c, void *r, void *ar
     sds			 cmd, key;
 
     if (reply && reply->type == RESP_REPLY_INTEGER && reply->integer == 0) {
-	/* forward set was auto-deleted by SREM - clean the instance hash too */
+	/* forward set was auto-deleted by SREM - clean inst hash and instmap */
+	sds	iid_sds = sdsnewlen(ctx->iid_bin, 20);
+
+	if (iid_sds) {
+	    keyMapDelete(instmap, iid_sds);
+	    sdsfree(iid_sds);
+	}
 	key = sdscatfmt(sdsempty(), "pcp:inst:series:%s", ctx->ih_hex);
 	cmd = resp_command(2);
 	cmd = resp_param_str(cmd, DEL, DEL_LEN);
@@ -2063,6 +2213,7 @@ keys_series_gc_inst_hget_callback(keyClusterAsyncContext *c, void *r, void *arg)
     }
 
     pmwebapi_hash_str((unsigned char *)reply->str, ctx->iid_hex, sizeof(ctx->iid_hex));
+    memcpy(ctx->iid_bin, reply->str, 20);
 
     key = sdscatfmt(sdsempty(), "pcp:series:inst.name:%s", ctx->iid_hex);
     cmd = resp_command(3);
@@ -2076,20 +2227,85 @@ keys_series_gc_inst_hget_callback(keyClusterAsyncContext *c, void *r, void *arg)
 }
 
 /*
- * Context source resolution context for SMEMBERS → N SREMs.
+ * Context source resolution: SMEMBERS → N SREMs → N EXISTS → contextmap deletes.
+ * Stores up to SERIES_GC_MAX_CIDS CID binaries for the EXISTS phase.
  */
+#define SERIES_GC_MAX_CIDS	8
+
 typedef struct {
     seriesGCEntry	*entry;
-    unsigned int	 npending;
+    unsigned int	 npending;	/* SREMs or EXISTS checks in flight */
+    unsigned int	 ncids;		/* number of CIDs stored */
+    unsigned char	 cid_bins[SERIES_GC_MAX_CIDS][20];
+    char		 cid_hexes[SERIES_GC_MAX_CIDS][42];
 } seriesGCCtxCtx;
+
+/* Per-CID mini-baton for the EXISTS phase of context cleanup. */
+typedef struct {
+    seriesGCCtxCtx	*parent;
+    unsigned int	 idx;	/* which cid_bins[idx] this EXISTS is for */
+} seriesGCCtxExistsCtx;
+
+static void
+keys_series_gc_ctx_exists_callback(keyClusterAsyncContext *c, void *r, void *arg)
+{
+    seriesGCCtxExistsCtx *ec = (seriesGCCtxExistsCtx *)arg;
+    seriesGCCtxCtx	 *ctx = ec->parent;
+    seriesGCEntry	 *entry = ctx->entry;
+    respReply		 *reply = r;
+    sds			  cid_sds;
+
+    if (reply && reply->type == RESP_REPLY_INTEGER && reply->integer == 0) {
+	/* set gone — remove this CID from contextmap */
+	if ((cid_sds = sdsnewlen(ctx->cid_bins[ec->idx], 20)) != NULL) {
+	    keyMapDelete(contextmap, cid_sds);
+	    sdsfree(cid_sds);
+	}
+    }
+    free(ec);
+
+    if (--ctx->npending == 0) {
+	free(ctx);
+	doneSeriesGCEntry(entry, "keys_series_gc_ctx_exists_callback");
+    }
+}
 
 static void
 keys_series_gc_ctx_srem_callback(keyClusterAsyncContext *c, void *r, void *arg)
 {
     seriesGCCtxCtx	*ctx = (seriesGCCtxCtx *)arg;
     seriesGCEntry	*entry = ctx->entry;
+    sds			 cmd, key;
+    unsigned int	 i;
 
-    if (--ctx->npending == 0) {
+    if (--ctx->npending > 0)
+	return;	/* more SREMs still in flight */
+
+    /* all SREMs done; pivot to EXISTS phase to check which sets became empty */
+    if (ctx->ncids > 0) {
+	ctx->npending = ctx->ncids;
+	for (i = 0; i < ctx->ncids; i++) {
+	    seriesGCCtxExistsCtx	*ec;
+
+	    if ((ec = calloc(1, sizeof(seriesGCCtxExistsCtx))) == NULL) {
+		if (--ctx->npending == 0) {
+		    free(ctx);
+		    doneSeriesGCEntry(entry, "keys_series_gc_ctx_srem_callback OOM");
+		}
+		continue;
+	    }
+	    ec->parent = ctx;
+	    ec->idx = i;
+	    key = sdscatfmt(sdsempty(), "pcp:series:context.name:%s", ctx->cid_hexes[i]);
+	    cmd = resp_command(2);
+	    cmd = resp_param_str(cmd, EXISTS, EXISTS_LEN);
+	    cmd = resp_param_sds(cmd, key);
+	    sdsfree(key);
+	    keySlotsRequestFirstNode(entry->slots, cmd,
+			    keys_series_gc_ctx_exists_callback, ec);
+	    sdsfree(cmd);
+	}
+    } else {
 	free(ctx);
 	doneSeriesGCEntry(entry, "keys_series_gc_ctx_srem_callback");
     }
@@ -2123,12 +2339,21 @@ keys_series_gc_ctx_smembers_callback(keyClusterAsyncContext *c, void *r, void *a
     }
 
     ctx->npending = nsrems;
+    ctx->ncids = 0;
     for (i = 0; i < reply->elements; i++) {
 	if (reply->element[i]->type != RESP_REPLY_STRING ||
 	    reply->element[i]->len != 20)
 	    continue;
 	pmwebapi_hash_str((unsigned char *)reply->element[i]->str,
 			cidhex, sizeof(cidhex));
+
+	/* store CID for EXISTS phase, up to SERIES_GC_MAX_CIDS */
+	if (ctx->ncids < SERIES_GC_MAX_CIDS) {
+	    memcpy(ctx->cid_bins[ctx->ncids], reply->element[i]->str, 20);
+	    memcpy(ctx->cid_hexes[ctx->ncids], cidhex, 42);
+	    ctx->ncids++;
+	}
+
 	key = sdscatfmt(sdsempty(), "pcp:series:context.name:%s", cidhex);
 	cmd = resp_command(3);
 	cmd = resp_param_str(cmd, SREM, SREM_LEN);
@@ -2211,10 +2436,21 @@ keys_series_gc_sweep(seriesGCEntry *entry)
 		    keys_series_gc_done_callback, entry);
     sdsfree(cmd);
 
-    /* 2. SREM series H from pcp:series:metric.name:<MID_hex> */
+    /* 2. SREM series H from pcp:series:metric.name:<MID_hex>;
+     *    if the set auto-empties, also remove from namesmap. */
     for (i = 0; i < entry->nmetric_ids; i++) {
+	seriesGCMetricCtx	*mctx;
+
 	pmwebapi_hash_str((unsigned char *)entry->metric_ids[i],
 			hexbuf, sizeof(hexbuf));
+	if ((mctx = calloc(1, sizeof(seriesGCMetricCtx))) == NULL) {
+	    doneSeriesGCEntry(entry, "keys_series_gc_sweep mctx OOM");
+	    continue;
+	}
+	mctx->entry = entry;
+	mctx->mid_bin = sdsdup(entry->metric_ids[i]);
+	memcpy(mctx->mid_hex, hexbuf, sizeof(mctx->mid_hex));
+
 	key = sdscatfmt(sdsempty(), "pcp:series:metric.name:%s", hexbuf);
 	cmd = resp_command(3);
 	cmd = resp_param_str(cmd, SREM, SREM_LEN);
@@ -2222,7 +2458,7 @@ keys_series_gc_sweep(seriesGCEntry *entry)
 	cmd = resp_param_str(cmd, entry->hash, 40);
 	sdsfree(key);
 	keySlotsRequestFirstNode(entry->slots, cmd,
-			keys_series_gc_done_callback, entry);
+			keys_series_gc_metric_srem_callback, mctx);
 	sdsfree(cmd);
     }
 
@@ -2248,12 +2484,25 @@ keys_series_gc_sweep(seriesGCEntry *entry)
 	sdsfree(cmd);
     }
 
-    /* 4. SREM series H from pcp:series:label.<LN_hex>.value:<LV_hex> */
+    /* 4. SREM series H from pcp:series:label.<LN_hex>.value:<LV_hex>;
+     *    if the forward set empties, HDEL from pcp:map:label.<LN>.value,
+     *    and if that map hash also empties, DEL it and clean labelsmap. */
     for (i = 0; i < entry->nlabels; i++) {
+	seriesGCLabelCtx	*lctx;
+
 	pmwebapi_hash_str((unsigned char *)entry->label_name_ids[i],
 			nhex, sizeof(nhex));
 	pmwebapi_hash_str((unsigned char *)entry->label_val_ids[i],
 			vhex, sizeof(vhex));
+	if ((lctx = calloc(1, sizeof(seriesGCLabelCtx))) == NULL) {
+	    doneSeriesGCEntry(entry, "keys_series_gc_sweep lctx OOM");
+	    continue;
+	}
+	lctx->entry = entry;
+	lctx->ln_bin = sdsdup(entry->label_name_ids[i]);
+	lctx->lv_bin = sdsdup(entry->label_val_ids[i]);
+	memcpy(lctx->ln_hex, nhex, sizeof(lctx->ln_hex));
+
 	key = sdscatfmt(sdsempty(), "pcp:series:label.%s.value:%s", nhex, vhex);
 	cmd = resp_command(3);
 	cmd = resp_param_str(cmd, SREM, SREM_LEN);
@@ -2261,7 +2510,7 @@ keys_series_gc_sweep(seriesGCEntry *entry)
 	cmd = resp_param_str(cmd, entry->hash, 40);
 	sdsfree(key);
 	keySlotsRequestFirstNode(entry->slots, cmd,
-			keys_series_gc_done_callback, entry);
+			keys_series_gc_label_srem_callback, lctx);
 	sdsfree(cmd);
     }
 

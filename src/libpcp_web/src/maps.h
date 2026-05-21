@@ -43,6 +43,7 @@ extern keyMap *keyMapCreate(sds);
 extern keyMapEntry *keyMapLookup(keyMap *, sds);
 extern sds keyMapValue(keyMapEntry *);
 extern void keyMapInsert(keyMap *, sds, sds);
+extern void keyMapDelete(keyMap *, sds);
 
 /*
  * Helper utilities and data structures

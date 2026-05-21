@@ -194,6 +194,13 @@ keyMapLookup(keyMap *map, sds key)
 }
 
 void
+keyMapDelete(keyMap *map, sds key)
+{
+    if (map && map->dict)
+	dictDelete(map->dict, key);
+}
+
+void
 keyMapInsert(keyMap *map, sds key, sds value)
 {
     keyMapEntry *entry = keyMapLookup(map, key);

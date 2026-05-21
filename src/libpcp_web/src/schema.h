@@ -40,12 +40,16 @@
 #define GEOADD_LEN	(sizeof(GEOADD)-1)
 #define GETS		"GET"
 #define GETS_LEN	(sizeof(GETS)-1)
+#define HDEL		"HDEL"
+#define HDEL_LEN	(sizeof(HDEL)-1)
 #define HGET		"HGET"
 #define HGET_LEN	(sizeof(HGET)-1)
 #define HGETALL		"HGETALL"
 #define HGETALL_LEN	(sizeof(HGETALL)-1)
 #define HKEYS		"HKEYS"
 #define HKEYS_LEN	(sizeof(HKEYS)-1)
+#define HLEN		"HLEN"
+#define HLEN_LEN	(sizeof(HLEN)-1)
 #define HMGET		"HMGET"
 #define HMGET_LEN	(sizeof(HMGET)-1)
 #define HMSET		"HMSET"

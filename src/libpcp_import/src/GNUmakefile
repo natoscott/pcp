@@ -43,7 +43,11 @@ endif
 
 LCFLAGS = -DPMI_INTERNAL
 LLDLIBS = -lpcp -lpcp_archive
+<<<<<<< HEAD
 LDIRT = $(SYMTARGET) domain.h $(LIBCONFIG) $(TMPFILESCONF)
+=======
+LDIRT = $(SYMTARGET) domain.h $(LIBCONFIG)
+>>>>>>> 8814c72921 (libpcp_import: eliminate .meta bloat in append-mode archives)
 
 DOMAIN = PMI_DOMAIN
 

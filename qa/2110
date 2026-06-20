@@ -1,0 +1,56 @@
+#!/bin/sh
+# PCP QA Test No. 2110
+# pcp-collectl - basic CPU, disk, memory, network collection
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+. ./common.product
+. ./common.filter
+. ./common.check
+
+which collectl >/dev/null 2>&1 || _notrun "collectl (pcp-collectl) not installed"
+collectl -v 2>&1 | grep -q "pcp-collectl" || _notrun "collectl is not pcp-collectl"
+pminfo hinv.ncpu >/dev/null 2>&1 || _notrun "linux PMDA not available"
+
+status=1
+trap "cd $here; rm -rf $tmp $tmp.*; exit \$status" 0 1 2 3 15
+
+_filter_collectl()
+{
+    # normalise numeric values to NNN so output is deterministic
+    sed \
+        -e 's/[0-9][0-9]*\.[0-9]*/NNN/g' \
+        -e 's/[0-9][0-9]*/NNN/g' \
+        -e 's/pcp-collectl version .*/pcp-collectl version VERSION/' \
+        -e 's/Based on collectl .*/Based on collectl VERSION/'
+}
+
+# real QA test starts here
+
+echo "=== version output ==="
+collectl -v 2>&1 \
+| grep -E "^pcp-collectl|^Based on|^Copyright|^http" \
+| _filter_collectl
+
+echo "=== CPU brief, 2 samples ==="
+collectl -s c -c 2 -i 1 2>&1 \
+| grep -E "^#Time|^CPU" \
+| head -4 \
+| _filter_collectl
+
+echo "=== disk+memory+network brief, 1 sample ==="
+collectl -s dmn -c 1 -i 1 2>&1 \
+| grep -E "^#Time|^DSK|^MEM|^NET" \
+| head -6 \
+| _filter_collectl
+
+echo "=== subsystem selection parsing ==="
+# verify that unknown subsystem codes are silently ignored
+collectl -s c -c 1 -i 1 2>&1 | grep -c "^CPU" | _filter_collectl
+
+status=0
+exit

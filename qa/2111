@@ -1,0 +1,63 @@
+#!/bin/sh
+# PCP QA Test No. 2111
+# pcp-collectl - PCP archive write and playback
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+. ./common.product
+. ./common.filter
+. ./common.check
+
+_check_collectl()
+{
+    # pcp-collectl is in PCP_BINADM_DIR, accessible via the collectl symlink
+    which collectl >/dev/null 2>&1 || _notrun "collectl (pcp-collectl) not installed"
+    collectl -v 2>&1 | grep -q "pcp-collectl" || _notrun "collectl is not pcp-collectl"
+}
+_check_collectl
+pminfo hinv.ncpu >/dev/null 2>&1 || _notrun "linux PMDA not available"
+
+status=1
+archdir="$tmp.arch"
+trap "cd $here; rm -rf $tmp $tmp.* $archdir; exit \$status" 0 1 2 3 15
+
+_filter_collectl()
+{
+    sed \
+        -e 's/[0-9][0-9]*\.[0-9]*/NNN/g' \
+        -e 's/[0-9][0-9]*/NNN/g'
+}
+
+# real QA test starts here
+
+mkdir -p "$archdir"
+
+echo "=== write 3 samples to PCP archive ==="
+collectl -s cdmn -c 3 -i 1 -f "$archdir" 2>&1 \
+| _filter_collectl
+
+echo "=== archive was created ==="
+ls "$archdir"/*.meta >/dev/null 2>&1 && echo "archive OK" || echo "archive MISSING"
+
+echo "=== verify key metrics in archive ==="
+arch=$(ls "$archdir"/*.meta 2>/dev/null | head -1 | sed 's/\.meta//')
+if [ -n "$arch" ]; then
+    pminfo -a "$arch" 2>/dev/null \
+    | grep -E "^kernel\.all\.cpu|^disk\.all|^mem\.util|^network\.all" \
+    | sort | head -8
+fi
+
+echo "=== playback from archive ==="
+if [ -n "$arch" ]; then
+    collectl -s c -a "$arch" 2>&1 \
+    | grep -E "^#Time|^CPU" \
+    | head -4 \
+    | _filter_collectl
+fi
+
+status=0
+exit

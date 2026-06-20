@@ -20,8 +20,8 @@
 #ifndef PCP_COLLECTL_H
 #define PCP_COLLECTL_H
 
-#include <pcp/pmapi.h>
-#include <pcp/import.h>
+#include "pmapi.h"
+#include "import.h"
 #include <regex.h>
 
 /* ------------------------------------------------------------------ */

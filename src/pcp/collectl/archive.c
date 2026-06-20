@@ -12,12 +12,61 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
-#include <pcp/import.h>
+#include "import.h"
 #include "pcp-collectl.h"
 
 static int arch_ctx = -1;
+static char arch_path[MAXPATHLEN];  /* saved for pmimport sidecar */
+
+/*
+ * Write PCP_RUN_DIR/pmimport/collectl for pmdapmcd to serve as
+ * pmcd.pmimport.{archive,version,args}.  Uses open()+fdopen() to
+ * pin permissions to 0644 regardless of umask.
+ */
+static void
+write_pmimport_sidecar(collectl_ctx *ctx, const char *archive_path)
+{
+    char dir[MAXPATHLEN];
+    char sidecar[MAXPATHLEN];
+    const char *rundir;
+    int fd;
+    FILE *fp;
+
+    rundir = pmGetConfig("PCP_RUN_DIR");
+
+    pmsprintf(dir, sizeof(dir), "%s/pmimport", rundir);
+    mkdir(dir, 0755);
+
+    pmsprintf(sidecar, sizeof(sidecar), "%s/collectl", dir);
+    fd = open(sidecar, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0)
+        return;
+    if ((fp = fdopen(fd, "w")) == NULL) {
+        close(fd);
+        return;
+    }
+    fprintf(fp, "version=%s\n", PCP_COLLECTL_VERSION);
+    fprintf(fp, "args=%s\n", ctx->opts[0] ? ctx->opts : "-s all");
+    fprintf(fp, "archive=%s\n", archive_path);
+    fclose(fp);
+}
+
+static void
+remove_pmimport_sidecar(void)
+{
+    char sidecar[MAXPATHLEN];
+    const char *rundir;
+
+    rundir = pmGetConfig("PCP_RUN_DIR");
+    pmsprintf(sidecar, sizeof(sidecar), "%s/pmimport/collectl", rundir);
+    unlink(sidecar);
+}
 
 /*
  * Build archive path: <dir>/collectl/<hostname>/<YYYYMMDD>
@@ -54,6 +103,7 @@ archive_open(collectl_ctx *ctx)
     int nsets, i, j, saved;
 
     build_archive_path(ctx, path, sizeof(path));
+    pmstrncpy(arch_path, sizeof(arch_path), path);
 
     arch_ctx = pmiStart(path, PMI_APPEND);
     if ((pmiUseContext(arch_ctx)) < 0) {
@@ -91,7 +141,6 @@ archive_open(collectl_ctx *ctx)
         }
         pmFreeLabelSets(sets, nsets);
     }
-
     write_pmimport_sidecar(ctx, arch_path);
 
     /* register all active subsystem metrics */
@@ -136,4 +185,6 @@ archive_close(collectl_ctx *ctx)
         return;
     pmiEnd();
     arch_ctx = -1;
+    remove_pmimport_sidecar();
+    (void)ctx;
 }

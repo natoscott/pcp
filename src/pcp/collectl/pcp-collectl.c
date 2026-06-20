@@ -231,6 +231,7 @@ main(int argc, char *argv[])
     collectl_ctx ctx;
     int subsys_set = 0;
     int interval_set = 0;
+    char lpath[MAXPATHLEN];
 
     memset(&ctx, 0, sizeof(ctx));
     ctx.interval       = DEFAULT_INTERVAL;
@@ -339,9 +340,20 @@ main(int argc, char *argv[])
     if (ctx.playback)
         return playback_loop(&ctx);
 
-    ctx.ctx = pmNewContext(PM_CONTEXT_HOST, "localhost");
+    /*
+     * Use PM_CONTEXT_LOCAL to load DSO PMDAs directly in-process,
+     * same pattern as sysstat sadc/pcp_local_init().  Point at the
+     * local.conf PMDA list and local.root PMNS so the right DSOs load.
+     */
+    pmsprintf(lpath, sizeof(lpath), "%s/local.conf",
+              pmGetConfig("PCP_SYSCONF_DIR"));
+    setenv("PCP_PMCDCONF_FILE", lpath, 0);
+    pmsprintf(lpath, sizeof(lpath), "%s/pmns/local.root",
+              pmGetConfig("PCP_VAR_DIR"));
+    setenv("PMNS_DEFAULT", lpath, 0);
+    ctx.ctx = pmNewContext(PM_CONTEXT_LOCAL, NULL);
     if (ctx.ctx < 0) {
-        fprintf(stderr, "%s: cannot connect to pmcd: %s\n",
+        fprintf(stderr, "%s: cannot create local context: %s\n",
                 pmGetProgname(), pmErrStr(ctx.ctx));
         exit(1);
     }

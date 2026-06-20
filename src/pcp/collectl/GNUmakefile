@@ -28,14 +28,14 @@ LCFLAGS += -DCOLLECTL_RUN_PATH='"$(PCP_RUN_DIR)"'
 LCFLAGS += -DCOLLECTL_LOG_PATH='"$(PCP_LOG_DIR)"'
 LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.10"'
 
-LDIRT = pcp-collectl.service collectl.conf
+LDIRT = collectl.service collectl.conf
 
-default: $(CMDTARGETS) pcp-collectl.service collectl.conf
+default: $(CMDTARGETS) collectl.service collectl.conf
 
 # .in -> final: substitute @PCP_*@ placeholders
-pcp-collectl.service: service/pcp-collectl.service.in
+collectl.service: service/collectl.service.in
 	$(SED) \
-	    -e 's|@PCP_BIN_DIR@|$(PCP_BIN_DIR)|g' \
+	    -e 's|@PCP_BINADM_DIR@|$(PCP_BINADM_DIR)|g' \
 	    -e 's|@PCP_RUN_DIR@|$(PCP_RUN_DIR)|g' \
 	    $< > $@
 
@@ -46,12 +46,12 @@ collectl.conf: collectl.conf.in
 	    $< > $@
 
 install: default
-	$(INSTALL) -m 755 pcp-collectl $(PCP_BIN_DIR)/pcp-collectl
+	$(INSTALL) -m 755 pcp-collectl $(PCP_BINADM_DIR)/pcp-collectl
 	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/collectl
 	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
-	$(INSTALL) -m 644 pcp-collectl.service $(PCP_SYSTEMDUNIT_DIR)/pcp-collectl.service
+	$(INSTALL) -m 644 collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
 	$(INSTALL) -m 644 man/pcp-collectl.1 $(PCP_MAN_DIR)/man1/pcp-collectl.1
-	$(INSTALL) -S $(PCP_BIN_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
+	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
 	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-collectl.1 $(PCP_MAN_DIR)/man1/collectl.1
 
 include $(BUILDRULES)

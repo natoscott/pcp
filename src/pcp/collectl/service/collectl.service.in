@@ -5,8 +5,8 @@ After=pmcd.service
 
 [Service]
 Type=forking
-PIDFile=@PCP_RUN_DIR@/pcp-collectl.pid
-ExecStart=@PCP_BIN_DIR@/pcp-collectl -D
+PIDFile=@PCP_RUN_DIR@/collectl.pid
+ExecStart=@PCP_BINADM_DIR@/pcp-collectl -D
 ExecReload=/bin/kill -USR1 $MAINPID
 
 [Install]

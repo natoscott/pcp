@@ -202,6 +202,6 @@ extern volatile sig_atomic_t sigusr1_caught;
  * Config/pid paths — COLLECTL_SYSCONF_PATH and COLLECTL_RUN_PATH are
  * injected as -D compile flags by the GNUmakefile from builddefs variables.
  */
-#define COLLECTL_PIDFILE    COLLECTL_RUN_PATH "/pcp-collectl.pid"
+#define COLLECTL_PIDFILE    COLLECTL_RUN_PATH "/collectl.pid"
 
 #endif /* PCP_COLLECTL_H */

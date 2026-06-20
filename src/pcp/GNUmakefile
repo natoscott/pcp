@@ -19,6 +19,7 @@ include $(TOPDIR)/src/include/builddefs
 SUBDIRS = \
 	atop \
 	buddyinfo \
+	collectl \
 	dmcache \
 	dstat \
 	free \

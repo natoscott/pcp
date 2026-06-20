@@ -86,11 +86,16 @@ daemonise(collectl_ctx *ctx)
             close(fd);
     }
 
-    /* write PID file */
-    if ((fp = fopen(COLLECTL_PIDFILE, "w")) != NULL) {
-        snprintf(pidbuf, sizeof(pidbuf), "%ld\n", (long)getpid());
-        fputs(pidbuf, fp);
-        fclose(fp);
+    /* write PID file with explicit 0644 regardless of umask */
+    {
+        int pfd = open(COLLECTL_PIDFILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        if (pfd >= 0 && (fp = fdopen(pfd, "w")) != NULL) {
+            snprintf(pidbuf, sizeof(pidbuf), "%ld\n", (long)getpid());
+            fputs(pidbuf, fp);
+            fclose(fp);
+        } else if (pfd >= 0) {
+            close(pfd);
+        }
     }
 
     return 0;

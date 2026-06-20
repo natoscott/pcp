@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include "pcp-collectl.h"
 
 #define COLLECTL_DEFAULT_PORT   2655
@@ -41,10 +42,13 @@ parse_address(const char *spec, char *host, size_t hlen,
     *server_mode = 0;
 
     if (strncmp(buf, "server", 6) == 0) {
+        long pv;
         *server_mode = 1;
         p = buf + 6;
-        if (*p == ':')
-            *port = atoi(p + 1);
+        if (*p == ':') {
+            pv = strtol(p + 1, NULL, 10);
+            if (pv >= 1 && pv <= 65535) *port = (int)pv;
+        }
         pmstrncpy(host, hlen, "0.0.0.0");
         return 0;
     }
@@ -52,10 +56,14 @@ parse_address(const char *spec, char *host, size_t hlen,
     /* host[:port[:timeout]] */
     pmstrncpy(host, hlen, buf);
     if ((p = strchr(host, ':')) != NULL) {
+        long pv, tv;
         *p = '\0';
-        *port = atoi(p + 1);
-        if ((q = strchr(p + 1, ':')) != NULL)
-            *timeout = atoi(q + 1);
+        pv = strtol(p + 1, NULL, 10);
+        if (pv >= 1 && pv <= 65535) *port = (int)pv;
+        if ((q = strchr(p + 1, ':')) != NULL) {
+            tv = strtol(q + 1, NULL, 10);
+            if (tv > 0 && tv <= 3600) *timeout = (int)tv;
+        }
     }
     return 0;
 }
@@ -104,21 +112,26 @@ socket_server(collectl_ctx *ctx)
         }
     } else {
         /* client mode: connect to remote colmux */
-        struct hostent *he = gethostbyname(host);
-        if (!he) {
-            fprintf(stderr, "pcp-collectl: unknown host: %s\n", host);
+        struct addrinfo hints, *res;
+        char portstr[16];
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family   = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        pmsprintf(portstr, sizeof(portstr), "%d", port);
+
+        if (getaddrinfo(host, portstr, &hints, &res) != 0 || res == NULL) {
+            fprintf(stderr, "pcp-collectl: cannot resolve host: %s\n", host);
             close(sockfd);
             return -1;
         }
-        memset(&sa, 0, sizeof(sa));
-        sa.sin_family = AF_INET;
-        memcpy(&sa.sin_addr, he->h_addr, he->h_length);
-        sa.sin_port = htons((unsigned short)port);
-        if (connect(sockfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
             perror("pcp-collectl: connect");
+            freeaddrinfo(res);
             close(sockfd);
             return -1;
         }
+        freeaddrinfo(res);
         clientfd = sockfd;
     }
 

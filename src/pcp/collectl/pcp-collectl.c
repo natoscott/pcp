@@ -127,11 +127,11 @@ parse_subsys(collectl_ctx *ctx, const char *spec)
 static void
 parse_intervals(collectl_ctx *ctx, const char *spec)
 {
-    unsigned int i1 = 0, i2 = 0, i3 = 0;
-    if (sscanf(spec, "%u:%u:%u", &i1, &i2, &i3) >= 1) {
-        if (i1) ctx->interval  = i1;
-        if (i2) ctx->interval2 = i2;
-        if (i3) ctx->interval3 = i3;
+    unsigned long i1 = 0, i2 = 0, i3 = 0;
+    if (sscanf(spec, "%lu:%lu:%lu", &i1, &i2, &i3) >= 1) {
+        if (i1 && i1 <= 86400) ctx->interval  = (unsigned int)i1;
+        if (i2 && i2 <= 86400) ctx->interval2 = (unsigned int)i2;
+        if (i3 && i3 <= 86400) ctx->interval3 = (unsigned int)i3;
     }
 }
 
@@ -180,12 +180,18 @@ read_config(collectl_ctx *ctx, int daemon_mode,
         /* trim leading spaces from val */
         while (*val == ' ' || *val == '\t') val++;
 
-        if (strcmp(key, "Interval") == 0 && !*interval_set)
-            ctx->interval = (unsigned int)atoi(val);
-        else if (strcmp(key, "Interval2") == 0 && !*interval_set)
-            ctx->interval2 = (unsigned int)atoi(val);
-        else if (strcmp(key, "Interval3") == 0 && !*interval_set)
-            ctx->interval3 = (unsigned int)atoi(val);
+        if (strcmp(key, "Interval") == 0 && !*interval_set) {
+            long v = strtol(val, NULL, 10);
+            if (v > 0 && v <= 86400) ctx->interval = (unsigned int)v;
+        }
+        else if (strcmp(key, "Interval2") == 0 && !*interval_set) {
+            long v = strtol(val, NULL, 10);
+            if (v > 0 && v <= 86400) ctx->interval2 = (unsigned int)v;
+        }
+        else if (strcmp(key, "Interval3") == 0 && !*interval_set) {
+            long v = strtol(val, NULL, 10);
+            if (v > 0 && v <= 86400) ctx->interval3 = (unsigned int)v;
+        }
         else if (strcmp(key, "SubsysCore") == 0 && !*subsys_set) {
             ctx->subsys = SS_INTERACTIVE_DEFAULT;
             parse_subsys(ctx, val);
@@ -213,7 +219,7 @@ read_config(collectl_ctx *ctx, int daemon_mode,
                 } else if (strcmp(tok, "-f") == 0 || strcmp(tok, "--filename") == 0) {
                     char *arg = strtok_r(NULL, " \t", &rest);
                     if (arg && !ctx->filename)
-                        ctx->filename = arg;    /* points into config buffer! */
+                        ctx->filename = strdup(arg);
                 }
             }
         }
@@ -247,9 +253,11 @@ main(int argc, char *argv[])
 
     while ((c = pmGetOptions(argc, argv, &opts)) != EOF) {
         switch (c) {
-        case 'c':
-            ctx.count = atoi(opts.optarg);
+        case 'c': {
+            long n = strtol(opts.optarg, NULL, 10);
+            ctx.count = (n > 0) ? (int)n : -1;
             break;
+        }
         case 'i':
             parse_intervals(&ctx, opts.optarg);
             interval_set = 1;
@@ -316,8 +324,11 @@ main(int argc, char *argv[])
                 filter_compile(&ctx.intfilt, opts.optarg);
             else if (strcmp(opts.long_options[opts.index].long_opt, "procfilt") == 0)
                 filter_compile(&ctx.procfilt, opts.optarg);
-            else if (strcmp(opts.long_options[opts.index].long_opt, "hr") == 0)
-                ctx.header_repeat = (unsigned int)atoi(opts.optarg);
+            else if (strcmp(opts.long_options[opts.index].long_opt, "hr") == 0) {
+                long n = strtol(opts.optarg, NULL, 10);
+                if (n > 0 && n <= 10000)
+                    ctx.header_repeat = (unsigned int)n;
+            }
             break;
         }
     }

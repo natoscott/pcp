@@ -49,8 +49,9 @@ static unsigned int n_all;
 static double       prev_vals[MAX_TOTAL_METRICS][MAX_INSTS];
 static int          prev_valid;     /* 1 after first fetch */
 
-/* Per-subsystem instance name caches */
-static inst_cache   inst_caches[32];    /* one per collectl_subsys entry */
+/* Per-subsystem instance name caches — sized at compile time */
+#define MAX_SUBSYS  32  /* must be >= collectl_nsubsys */
+static inst_cache   inst_caches[MAX_SUBSYS];
 
 /* Extracted values for output: [slot_idx][inst_idx] */
 static double       cur_vals[MAX_TOTAL_METRICS][MAX_INSTS];
@@ -178,7 +179,10 @@ subsys_fetch_all(collectl_ctx *ctx)
             /* populate instance name cache for instanced metrics */
             if ((ms->flags & MSF_INSTANCED) && vset->numval > 1) {
                 unsigned int si = all_slots[slot].ss_idx;
-                inst_cache *ic = &inst_caches[si];
+                inst_cache *ic;
+                if (si >= MAX_SUBSYS)
+                    continue;
+                ic = &inst_caches[si];
                 /* check if already cached */
                 unsigned int k;
                 for (k = 0; k < ic->n; k++)
@@ -231,7 +235,7 @@ subsys_fetch(collectl_ctx *ctx, const subsys_def *sd,
     }
 
     /* fill instance names from cache */
-    if (inst_names && inst_caches[si].n > 0) {
+    if (inst_names && si < MAX_SUBSYS && inst_caches[si].n > 0) {
         inst_cache *ic = &inst_caches[si];
         for (j = 0; j < ic->n && j < max_ninst; j++)
             inst_names[j] = ic->entries[j].name;

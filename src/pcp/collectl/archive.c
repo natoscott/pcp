@@ -29,6 +29,29 @@ static char arch_path[MAXPATHLEN];  /* saved for pmimport sidecar */
  * pmcd.pmimport.{archive,version,args}.  Uses open()+fdopen() to
  * pin permissions to 0644 regardless of umask.
  */
+/*
+ * Build a comma-separated list of active subsystem names from the
+ * bitmask, e.g. "CPU,DISK,MEMORY,NET,SOCK" — matching the style of
+ * sadc.activities so pcp-summary.sh can display it uniformly.
+ */
+static void
+build_subsys_string(unsigned int subsys, char *buf, size_t len)
+{
+    unsigned int s;
+    int first = 1;
+
+    buf[0] = '\0';
+    for (s = 0; s < collectl_nsubsys; s++) {
+        const subsys_def *sd = &collectl_subsys[s];
+        if (!(subsys & sd->ss_flag))
+            continue;
+        if (!first)
+            strncat(buf, " ", len - strlen(buf) - 1);
+        strncat(buf, sd->label, len - strlen(buf) - 1);
+        first = 0;
+    }
+}
+
 static void
 write_pmimport_sidecar(collectl_ctx *ctx, const char *archive_path)
 {
@@ -51,8 +74,10 @@ write_pmimport_sidecar(collectl_ctx *ctx, const char *archive_path)
         close(fd);
         return;
     }
+    char subsys_str[64];
+    build_subsys_string(ctx->subsys, subsys_str, sizeof(subsys_str));
     fprintf(fp, "version=%s\n", PCP_COLLECTL_VERSION);
-    fprintf(fp, "args=%s\n", ctx->opts[0] ? ctx->opts : "-s all");
+    fprintf(fp, "args=%s\n", subsys_str);
     fprintf(fp, "archive=%s\n", archive_path);
     fclose(fp);
 }

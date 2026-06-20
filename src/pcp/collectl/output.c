@@ -56,6 +56,10 @@ output_interval(collectl_ctx *ctx)
     if (ctx->header_repeat && ctx->header_count == 0)
         output_header(ctx);
 
+    /* single pmFetch for all active subsystems */
+    if (subsys_fetch_all(ctx) < 0)
+        return;
+
     for (s = 0; s < collectl_nsubsys; s++) {
         const subsys_def *sd = &collectl_subsys[s];
         if (!(ctx->subsys & sd->ss_flag))

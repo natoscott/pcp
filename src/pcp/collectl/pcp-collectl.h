@@ -156,6 +156,7 @@ extern const unsigned int collectl_nsubsys;
 
 /* subsys.c — generic machinery */
 int  subsys_lookup(collectl_ctx *ctx);
+int  subsys_fetch_all(collectl_ctx *ctx);
 int  subsys_fetch(collectl_ctx *ctx, const subsys_def *sd,
                   double *vals, char **inst_names, unsigned int *ninst);
 void subsys_output_brief(const subsys_def *sd, double *vals,

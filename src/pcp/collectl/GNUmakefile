@@ -51,9 +51,7 @@ install: default
 	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
 	$(INSTALL) -m 644 pcp-collectl.service $(PCP_SYSTEMDUNIT_DIR)/pcp-collectl.service
 	$(INSTALL) -m 644 man/pcp-collectl.1 $(PCP_MAN_DIR)/man1/pcp-collectl.1
-ifeq "$(ENABLE_COLLECTL)" "true"
 	$(INSTALL) -S $(PCP_BIN_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
 	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-collectl.1 $(PCP_MAN_DIR)/man1/collectl.1
-endif
 
 include $(BUILDRULES)

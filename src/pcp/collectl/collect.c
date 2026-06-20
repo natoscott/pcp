@@ -15,8 +15,6 @@
 #include <signal.h>
 #include "pcp-collectl.h"
 
-extern volatile sig_atomic_t sigint_caught;
-extern volatile sig_atomic_t sigusr1_caught;
 
 static void
 next_interval(struct timespec *next, unsigned int secs)

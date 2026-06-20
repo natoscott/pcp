@@ -194,6 +194,10 @@ int  playback_loop(collectl_ctx *ctx);
 /* socket.c */
 int  socket_server(collectl_ctx *ctx);
 
+/* daemon.c — signal flags referenced by collect.c, playback.c, socket.c */
+extern volatile sig_atomic_t sigint_caught;
+extern volatile sig_atomic_t sigusr1_caught;
+
 /*
  * Config/pid paths — COLLECTL_SYSCONF_PATH and COLLECTL_RUN_PATH are
  * injected as -D compile flags by the GNUmakefile from builddefs variables.

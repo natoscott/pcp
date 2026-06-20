@@ -135,12 +135,102 @@ parse_intervals(collectl_ctx *ctx, const char *spec)
     }
 }
 
+/*
+ * Parse collectl.conf key=value pairs and apply defaults not already
+ * set by command-line.  DaemonCommands is expanded into argc/argv when
+ * running in daemon mode, matching original collectl behaviour.
+ */
+static void
+read_config(collectl_ctx *ctx, int daemon_mode,
+            int *subsys_set, int *interval_set)
+{
+    FILE *fp;
+    char  line[512];
+    char *eq, *key, *val;
+    int   num = 0;
+
+    if ((fp = fopen(ctx->config, "r")) == NULL)
+        return;     /* config file is optional */
+
+    while (fgets(line, sizeof(line), fp)) {
+        num++;
+        line[strcspn(line, "\n\r")] = '\0';
+
+        /* skip blank lines and comments */
+        if (line[0] == '\0' || line[0] == '#')
+            continue;
+
+        if ((eq = strchr(line, '=')) == NULL) {
+            fprintf(stderr, "pcp-collectl: config line %d: no '=', ignored\n",
+                    num);
+            continue;
+        }
+
+        /* split on first '=' only (DaemonCommands value may contain '=') */
+        *eq = '\0';
+        key = line;
+        val = eq + 1;
+
+        /* trim leading/trailing spaces from key */
+        while (*key == ' ' || *key == '\t') key++;
+        {
+            char *e = key + strlen(key) - 1;
+            while (e > key && (*e == ' ' || *e == '\t')) *e-- = '\0';
+        }
+        /* trim leading spaces from val */
+        while (*val == ' ' || *val == '\t') val++;
+
+        if (strcmp(key, "Interval") == 0 && !*interval_set)
+            ctx->interval = (unsigned int)atoi(val);
+        else if (strcmp(key, "Interval2") == 0 && !*interval_set)
+            ctx->interval2 = (unsigned int)atoi(val);
+        else if (strcmp(key, "Interval3") == 0 && !*interval_set)
+            ctx->interval3 = (unsigned int)atoi(val);
+        else if (strcmp(key, "SubsysCore") == 0 && !*subsys_set) {
+            ctx->subsys = SS_INTERACTIVE_DEFAULT;
+            parse_subsys(ctx, val);
+            *subsys_set = 1;
+        }
+        else if (strcmp(key, "DaemonCommands") == 0 && daemon_mode) {
+            /*
+             * Expand DaemonCommands by re-parsing them as if they were
+             * command-line options.  Only applies when running as daemon.
+             * We do a simple word-split and call parse_subsys / parse_intervals
+             * for the options we recognise.
+             */
+            char *tok, *rest = val;
+            while ((tok = strtok_r(rest, " \t", &rest)) != NULL) {
+                if (strcmp(tok, "-s") == 0 || strcmp(tok, "--subsys") == 0) {
+                    char *arg = strtok_r(NULL, " \t", &rest);
+                    if (arg && !*subsys_set) {
+                        parse_subsys(ctx, arg);
+                        *subsys_set = 1;
+                    }
+                } else if (strcmp(tok, "-i") == 0 || strcmp(tok, "--interval") == 0) {
+                    char *arg = strtok_r(NULL, " \t", &rest);
+                    if (arg && !*interval_set)
+                        parse_intervals(ctx, arg);
+                } else if (strcmp(tok, "-f") == 0 || strcmp(tok, "--filename") == 0) {
+                    char *arg = strtok_r(NULL, " \t", &rest);
+                    if (arg && !ctx->filename)
+                        ctx->filename = arg;    /* points into config buffer! */
+                }
+            }
+        }
+        else if (strcmp(key, "DiskFilter") == 0)
+            filter_compile(&ctx->dskfilt, val);
+    }
+
+    fclose(fp);
+}
+
 int
 main(int argc, char *argv[])
 {
     int c;
     collectl_ctx ctx;
     int subsys_set = 0;
+    int interval_set = 0;
 
     memset(&ctx, 0, sizeof(ctx));
     ctx.interval       = DEFAULT_INTERVAL;
@@ -151,6 +241,9 @@ main(int argc, char *argv[])
     ctx.subsys         = SS_INTERACTIVE_DEFAULT;
     ctx.config         = COLLECTL_SYSCONF_PATH "/collectl/collectl.conf";
 
+    /* read config before option parsing so CLI overrides take effect */
+    read_config(&ctx, 0, &subsys_set, &interval_set);
+
     while ((c = pmGetOptions(argc, argv, &opts)) != EOF) {
         switch (c) {
         case 'c':
@@ -158,6 +251,7 @@ main(int argc, char *argv[])
             break;
         case 'i':
             parse_intervals(&ctx, opts.optarg);
+            interval_set = 1;
             break;
         case 'f':
             ctx.filename = opts.optarg;
@@ -167,9 +261,11 @@ main(int argc, char *argv[])
             break;
         case 'D':
             ctx.daemon = 1;
+            /* re-read config to apply DaemonCommands */
+            read_config(&ctx, 1, &subsys_set, &interval_set);
             if (!subsys_set)
                 ctx.subsys = SS_CORE_DEFAULT;
-            if (ctx.interval == DEFAULT_INTERVAL)
+            if (!interval_set)
                 ctx.interval = DEFAULT_INTERVAL_DAEMON;
             break;
         case 'P':
@@ -180,8 +276,8 @@ main(int argc, char *argv[])
             ctx.playback = opts.optarg;
             break;
         case 's':
-            subsys_set = 1;
             parse_subsys(&ctx, opts.optarg);
+            subsys_set = 1;
             break;
         case 'o':
             pmstrncpy(ctx.opts, sizeof(ctx.opts), opts.optarg);

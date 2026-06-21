@@ -10,7 +10,7 @@
 TOPDIR = ../../..
 include $(TOPDIR)/src/include/builddefs
 
-CMDTARGETS = pcp-collectl
+CMDTARGETS = pcp-collectl pcp-colmux
 
 CFILES = pcp-collectl.c \
 	 subsys.c subsys_defs.c \
@@ -18,7 +18,9 @@ CFILES = pcp-collectl.c \
 	 daemon.c socket.c \
 	 filter.c archive.c output.c
 
-HFILES = pcp-collectl.h
+COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c
+
+HFILES = pcp-collectl.h pcp-colmux.h
 
 LLDLIBS = $(PCP_LIB) -lpcp_import -lm
 
@@ -30,7 +32,12 @@ LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.10"'
 
 LDIRT = collectl.service collectl.conf
 
+COLMUX_OBJECTS = $(COLMUX_CFILES:.c=.o)
+
 default: $(CMDTARGETS) collectl.service collectl.conf
+
+pcp-colmux: $(COLMUX_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(PCP_LIB) -lm
 
 # .in -> final: substitute @PCP_*@ placeholders
 collectl.service: service/collectl.service.in
@@ -51,7 +58,11 @@ install: default
 	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
 	$(INSTALL) -m 644 collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
 	$(INSTALL) -m 644 man/pcp-collectl.1 $(PCP_MAN_DIR)/man1/pcp-collectl.1
+	$(INSTALL) -m 755 pcp-colmux $(PCP_BINADM_DIR)/pcp-colmux
+	$(INSTALL) -m 644 man/pcp-colmux.1 $(PCP_MAN_DIR)/man1/pcp-colmux.1
 	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
+	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-colmux   $(PCP_BIN_DIR)/colmux
 	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-collectl.1 $(PCP_MAN_DIR)/man1/collectl.1
+	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-colmux.1  $(PCP_MAN_DIR)/man1/colmux.1
 
 include $(BUILDRULES)

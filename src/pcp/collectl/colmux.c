@@ -14,7 +14,86 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 #include "pcp-colmux.h"
+
+/* forward declaration */
+int colmux_playback(colmux_ctx *ctx);
+
+static struct termios orig_termios;
+static int raw_mode_active;
+
+static void
+restore_terminal(void)
+{
+    if (raw_mode_active)
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+static void
+enable_raw_mode(void)
+{
+    struct termios raw;
+
+    if (!isatty(STDIN_FILENO))
+        return;
+    if (tcgetattr(STDIN_FILENO, &orig_termios) < 0)
+        return;
+    atexit(restore_terminal);
+
+    raw = orig_termios;
+    raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_cc[VMIN]  = 0;
+    raw.c_cc[VTIME] = 0;   /* non-blocking */
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    /* make stdin non-blocking so we can poll for keypresses */
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+    raw_mode_active = 1;
+}
+
+/*
+ * Read and process a single keypress (non-blocking).
+ * Returns 1 if the display loop should exit.
+ */
+static int
+handle_key(colmux_ctx *ctx)
+{
+    unsigned char buf[4];
+    ssize_t n;
+
+    n = read(STDIN_FILENO, buf, sizeof(buf));
+    if (n <= 0)
+        return 0;
+
+    if (buf[0] == 'q' || buf[0] == 'Q' || buf[0] == 3 /* Ctrl-C */)
+        return 1;
+
+    if (buf[0] == 'r') { ctx->reverse    ^= 1; return 0; }
+    if (buf[0] == 'z') { ctx->zero_filter ^= 1; return 0; }
+    if (buf[0] == 'f') { ctx->freeze     ^= 1; return 0; }
+
+    /* arrow keys: ESC [ A/B/C/D */
+    if (n >= 3 && buf[0] == 033 && buf[1] == '[') {
+        switch (buf[2]) {
+        case 'C':   /* right: next column */
+            ctx->sort_col++;
+            break;
+        case 'D':   /* left: prev column */
+            if (ctx->sort_col > 0) ctx->sort_col--;
+            break;
+        case 'A':   /* up: ascending */
+            ctx->reverse = 0;
+            break;
+        case 'B':   /* down: descending */
+            ctx->reverse = 1;
+            break;
+        }
+    }
+    return 0;
+}
 
 /*
  * colmux uses single-dash long options (-address, -command, -cols, etc.).
@@ -204,14 +283,25 @@ main(int argc, char *argv[])
         exit(opts.errors ? 1 : 0);
     }
 
-    /* connect to all hosts */
+    /* playback mode: open archives, step through, display */
+    if (ctx.playback[0] != '\0')
+        return colmux_playback(&ctx);
+
+    /* live mode: connect to all hosts */
     if (mux_connect_all(&ctx) < 0) {
-        fprintf(stderr, "pcp-colmux: no hosts available\n");
-        exit(1);
+        /* try legacy socket connections for any unreachable hosts */
+        if (legacy_socket_connect(&ctx) <= 0) {
+            fprintf(stderr, "pcp-colmux: no hosts available\n");
+            exit(1);
+        }
     }
 
-    /* main display loop */
-    while (1) {
+    /* enable interactive terminal if stdout is a tty */
+    if (!ctx.no_escape && isatty(STDIN_FILENO))
+        enable_raw_mode();
+
+    /* main display + input loop */
+    for (;;) {
         if (mux_fetch_all(&ctx) < 0)
             break;
 
@@ -220,10 +310,25 @@ main(int argc, char *argv[])
         else
             display_sorted(&ctx);
 
-        if (ctx.delay > 0)
-            usleep((useconds_t)(ctx.delay * 1e6));
+        /* poll for keypresses during the delay period */
+        {
+            double waited = 0.0;
+            double step   = 0.05;   /* 50ms slices */
+            double total  = ctx.delay > 0 ? ctx.delay : 0.0;
+
+            do {
+                if (handle_key(&ctx))
+                    goto done;
+                if (total > 0) {
+                    usleep((useconds_t)(step * 1e6));
+                    waited += step;
+                }
+            } while (waited < total);
+        }
     }
 
+done:
+    restore_terminal();
     mux_disconnect_all(&ctx);
     return 0;
 }

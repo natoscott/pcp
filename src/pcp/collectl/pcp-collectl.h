@@ -2,7 +2,7 @@
  * Copyright 2003-2018 Hewlett-Packard Development Company, L.P.
  * Copyright (c) 2026 Red Hat.
  *
- * pcp-collectl - PCP-native reimplementation of the collectl monitoring tool.
+ * pcp-collectl - PCP-native C reimplementation of the Perl collectl utility.
  * Original collectl by Mark Seger (mjseger@gmail.com), HP.
  * See http://collectl.sourceforge.net/ for the original project.
  *

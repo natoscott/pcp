@@ -18,7 +18,7 @@ CFILES = pcp-collectl.c \
 	 daemon.c socket.c \
 	 filter.c archive.c output.c
 
-COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c
+COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c colmux-playback.c
 
 HFILES = pcp-collectl.h pcp-colmux.h
 

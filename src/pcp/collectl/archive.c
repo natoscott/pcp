@@ -22,7 +22,8 @@
 #include "pcp-collectl.h"
 
 static int arch_ctx = -1;
-static char arch_path[MAXPATHLEN];  /* saved for pmimport sidecar */
+static char arch_path[MAXPATHLEN];  /* current archive path */
+char arch_path_last[MAXPATHLEN];    /* path of most recently closed archive */
 
 /*
  * Write PCP_RUN_DIR/pmimport/collectl for pmdapmcd to serve as
@@ -210,6 +211,9 @@ archive_close(collectl_ctx *ctx)
         return;
     pmiEnd();
     arch_ctx = -1;
+    /* save path so rotate_logs() knows what to compress */
+    pmstrncpy(arch_path_last, sizeof(arch_path_last), arch_path);
+    arch_path[0] = '\0';
     remove_pmimport_sidecar();
     (void)ctx;
 }

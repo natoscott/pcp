@@ -77,6 +77,10 @@ collect_loop(collectl_ctx *ctx)
     interval3_limit = (ctx->interval3 >= ctx->interval)
                           ? ctx->interval3 / ctx->interval : 1;
 
+    /* initialise rotation schedule if -r was given */
+    if (ctx->roll_time[0] != '\0')
+        ctx->next_roll = next_roll_time(ctx->roll_time, ctx->roll_mins);
+
     /* prime the pump: one silent fetch to initialise rate denominators */
     clock_gettime(CLOCK_REALTIME, &ctx->prev_ts);
     output_interval(ctx);   /* sets up prev values; first output skipped */
@@ -88,11 +92,13 @@ collect_loop(collectl_ctx *ctx)
         if (sigint_caught)
             break;
 
-        if (sigusr1_caught) {
+        /* SIGUSR1 or scheduled rotation */
+        if (sigusr1_caught ||
+            (ctx->next_roll && time(NULL) >= ctx->next_roll)) {
             sigusr1_caught = 0;
-            archive_close(ctx);
             rotate_logs(ctx);
-            archive_open(ctx);
+            if (ctx->roll_time[0] != '\0')
+                ctx->next_roll = next_roll_time(ctx->roll_time, ctx->roll_mins);
         }
 
         /* determine if secondary (process/slab) or tertiary (env) tick */

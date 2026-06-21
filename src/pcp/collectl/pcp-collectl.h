@@ -142,6 +142,13 @@ typedef struct {
 
     /* Output options string (from -o) */
     char            opts[64];       /* e.g. "dTz" */
+
+    /* Log rotation (-r HH:MM[,purgeDays[,rollMins]]) */
+    char            roll_time[8];   /* "HH:MM" */
+    unsigned int    purge_days;     /* data file retention (default 7) */
+    unsigned int    purge_months;   /* log file retention in months (default 12) */
+    unsigned int    roll_mins;      /* sub-day interval in minutes (0 = daily) */
+    time_t          next_roll;      /* epoch of next rotation */
 } collectl_ctx;
 
 /* ------------------------------------------------------------------ */
@@ -179,9 +186,11 @@ void archive_write(collectl_ctx *ctx);
 void archive_close(collectl_ctx *ctx);
 
 /* daemon.c */
-int  daemonise(collectl_ctx *ctx);
-void setup_signals(void);
-void rotate_logs(collectl_ctx *ctx);
+int    daemonise(collectl_ctx *ctx);
+void   setup_signals(void);
+void   rotate_logs(collectl_ctx *ctx);
+void   cull_old_archives(const char *dirpath, unsigned int purgeDays);
+time_t next_roll_time(const char *rollTime, unsigned int rollMins);
 
 /* filter.c */
 int  filter_compile(collectl_filter *f, const char *pattern);

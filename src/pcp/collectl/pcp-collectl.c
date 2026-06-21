@@ -241,6 +241,8 @@ main(int argc, char *argv[])
 
     memset(&ctx, 0, sizeof(ctx));
     ctx.interval       = DEFAULT_INTERVAL;
+    ctx.purge_days     = 7;
+    ctx.purge_months   = 12;
     ctx.interval2      = DEFAULT_INTERVAL2;
     ctx.interval3      = DEFAULT_INTERVAL3;
     ctx.count          = -1;
@@ -297,6 +299,24 @@ main(int argc, char *argv[])
         case 'A':
             ctx.address = opts.optarg;
             break;
+        case 'r': {
+            /* -r HH:MM[,purgeDays[,rollMins]] */
+            char tmp[64];
+            char *p1, *p2;
+            pmstrncpy(tmp, sizeof(tmp), opts.optarg);
+            p1 = strchr(tmp, ',');
+            if (p1) {
+                *p1++ = '\0';
+                p2 = strchr(p1, ',');
+                if (p2) {
+                    *p2++ = '\0';
+                    ctx.roll_mins = (unsigned int)strtol(p2, NULL, 10);
+                }
+                ctx.purge_days = (unsigned int)strtol(p1, NULL, 10);
+            }
+            pmstrncpy(ctx.roll_time, sizeof(ctx.roll_time), tmp);
+            break;
+        }
         case 'N':   /* --nice */
             nice(10);
             break;

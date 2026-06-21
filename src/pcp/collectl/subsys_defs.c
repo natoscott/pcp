@@ -201,13 +201,55 @@ static const metric_spec buddy_metrics[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/* NFS client (f)                                                       */
+/* TCP detail (T) — per-connection state counts                         */
+/* ------------------------------------------------------------------ */
+
+static const metric_spec tcp_detail_metrics[] = {
+    { "network.tcpconn.established", 0, 0, "Estab",   5 },
+    { "network.tcpconn.syn_sent",    0, 0, "SynSnt",  6 },
+    { "network.tcpconn.syn_recv",    0, 0, "SynRcv",  6 },
+    { "network.tcpconn.fin_wait1",   0, 0, "FinW1",   5 },
+    { "network.tcpconn.fin_wait2",   0, 0, "FinW2",   5 },
+    { "network.tcpconn.time_wait",   0, 0, "TWait",   5 },
+    { "network.tcpconn.close_wait",  0, 0, "ClsWt",   5 },
+    { "network.tcpconn.closing",     0, 0, "Closng",  6 },
+};
+
+/* ------------------------------------------------------------------ */
+/* NFS client (f) / NFS detail (F)                                      */
 /* ------------------------------------------------------------------ */
 
 static const metric_spec nfs_metrics[] = {
     { "nfs.client.calls",   MSF_RATE, 0, "Calls",  5 },
     { "nfs3.client.calls",  MSF_RATE, 0, "V3Call", 6 },
     { "nfs4.client.calls",  MSF_RATE, 0, "V4Call", 6 },
+};
+
+static const metric_spec nfs_detail_metrics[] = {
+    { "nfs.client.calls",    MSF_RATE, 0, "V2Calls",  7 },
+    { "nfs3.client.calls",   MSF_RATE, 0, "V3Calls",  7 },
+    { "nfs4.client.calls",   MSF_RATE, 0, "V4Calls",  7 },
+    { "nfs.server.calls",    MSF_RATE, 0, "SrvV2",    5 },
+    { "nfs3.server.calls",   MSF_RATE, 0, "SrvV3",    5 },
+    { "nfs4.server.calls",   MSF_RATE, 0, "SrvV4",    5 },
+};
+
+/* ------------------------------------------------------------------ */
+/* Lustre (l) — optional, requires Lustre PMDA                          */
+/* ------------------------------------------------------------------ */
+
+static const metric_spec lustre_metrics[] = {
+    { "lustre.llite.stats.read_bytes",  MSF_RATE|MSF_KB, 1.0/1024, "RdKB",  5 },
+    { "lustre.llite.stats.write_bytes", MSF_RATE|MSF_KB, 1.0/1024, "WrKB",  5 },
+};
+
+/* ------------------------------------------------------------------ */
+/* InfiniBand (x/X) — optional, requires IB PMDA                        */
+/* ------------------------------------------------------------------ */
+
+static const metric_spec ib_metrics[] = {
+    { "infiniband.port.in.bytes",  MSF_RATE|MSF_KB, 1.0/1024, "RxKB", 5 },
+    { "infiniband.port.out.bytes", MSF_RATE|MSF_KB, 1.0/1024, "TxKB", 5 },
 };
 
 /* ------------------------------------------------------------------ */
@@ -320,10 +362,34 @@ const subsys_def collectl_subsys[] = {
         NULL
     },
     {
-        'f', 0, "NFS", SS_NFS,
+        't', 'T', "TCP", SS_TCP,
+        tcp_metrics, sizeof(tcp_metrics)/sizeof(tcp_metrics[0]),
+        PM_INDOM_NULL,
+        "#Time  ActOpn PasOpn CurrEst Retrans  InErr OutRst",
+        "#Time  Estab SynSnt SynRcv FinW1 FinW2 TWait ClsWt Closng",
+        NULL
+    },
+    {
+        'f', 'F', "NFS", SS_NFS,
         nfs_metrics, sizeof(nfs_metrics)/sizeof(nfs_metrics[0]),
         PM_INDOM_NULL,
         "#Time  Calls V3Call V4Call",
+        "#Time  V2Calls V3Calls V4Calls SrvV2 SrvV3 SrvV4",
+        NULL
+    },
+    {
+        'l', 0, "LUS", SS_LUSTRE,
+        lustre_metrics, sizeof(lustre_metrics)/sizeof(lustre_metrics[0]),
+        (pmInDom)0xf00001e, /* 60.30 llite indom, optional */
+        "#Time   RdKB   WrKB",
+        NULL,
+        NULL
+    },
+    {
+        'x', 'X', "IB", SS_IB,
+        ib_metrics, sizeof(ib_metrics)/sizeof(ib_metrics[0]),
+        PM_INDOM_NULL,
+        "#Time   RxKB   TxKB",
         NULL,
         NULL
     },

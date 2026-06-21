@@ -164,6 +164,14 @@ extern const unsigned int collectl_nsubsys;
 /* subsys.c — generic machinery */
 int  subsys_lookup(collectl_ctx *ctx);
 int  subsys_fetch_all(collectl_ctx *ctx);
+void subsys_alloc_handles(void);
+void subsys_archive_write(collectl_ctx *ctx);
+
+/* subsys.c — colmux per-host fetch support */
+extern unsigned int subsys_n_all(void);
+int  subsys_mux_lookup(int pcp_ctx);
+int  subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
+                      double *prev_vals, struct timespec *prev_ts);
 int  subsys_fetch(collectl_ctx *ctx, const subsys_def *sd,
                   double *vals, char **inst_names, unsigned int *ninst);
 void subsys_output_brief(const subsys_def *sd, double *vals,

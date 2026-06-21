@@ -2,7 +2,6 @@
  * Copyright (c) 2026 Red Hat.
  *
  * pcp-collectl playback from PCP archives.
- * Handles both PCP native archives (via pmNewContext) and -a/--archive.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -26,7 +25,6 @@ playback_loop(collectl_ctx *ctx)
         return 1;
     }
 
-    /* step forward from beginning; pmFetch drives the interval */
     sts = pmSetMode(PM_MODE_FORW, (const pmTimespec *)&origin, 0);
     if (sts < 0) {
         fprintf(stderr, "pcp-collectl: pmSetMode failed: %s\n",
@@ -37,14 +35,23 @@ playback_loop(collectl_ctx *ctx)
     if (subsys_lookup(ctx) < 0)
         return 1;
 
-    /* replay loop: output_interval fetches from archive context */
+    /*
+     * Replay loop.  subsys_fetch_all() now propagates PM_ERR_EOL from
+     * pmFetch so output_interval() returns it upward via a thread-local
+     * variable.  We use a simpler approach: call subsys_fetch_all()
+     * directly and stop on PM_ERR_EOL.
+     */
     while (!sigint_caught) {
+        int fetch_sts = subsys_fetch_all(ctx);
+
+        if (fetch_sts == PM_ERR_EOL)
+            break;      /* clean end of archive */
+
+        if (fetch_sts < 0 && fetch_sts != PM_ERR_EOL)
+            break;      /* other error */
+
         output_interval(ctx);
-        /*
-         * subsys_fetch drives pmFetch internally; when it returns
-         * PM_ERR_EOL we're done.  A simple sentinel: if all subsystems
-         * return 0 values we've hit the end.
-         */
+
         if (ctx->count > 0 && --ctx->count == 0)
             break;
     }

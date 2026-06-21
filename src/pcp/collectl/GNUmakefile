@@ -37,7 +37,7 @@ COLMUX_OBJECTS = $(COLMUX_CFILES:.c=.o)
 default: $(CMDTARGETS) collectl.service collectl.conf
 
 pcp-colmux: $(COLMUX_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(PCP_LIB) -lm
+	$(CC) $(LDFLAGS) -o $@ $^ $(PCP_LIB) -lpcp_import -lm
 
 # .in -> final: substitute @PCP_*@ placeholders
 collectl.service: service/collectl.service.in

@@ -169,7 +169,10 @@ archive_open(collectl_ctx *ctx)
     }
     write_pmimport_sidecar(ctx, arch_path);
 
-    /* register all active subsystem metrics */
+    /* register all active subsystem metrics using pmDescs from local context */
+    saved = pmWhichContext();
+    pmUseContext(ctx->ctx);
+
     for (s = 0; s < collectl_nsubsys; s++) {
         const subsys_def *sd = &collectl_subsys[s];
         if (!(ctx->subsys & sd->ss_flag))
@@ -179,15 +182,39 @@ archive_open(collectl_ctx *ctx)
             pmDesc desc;
             pmID pmid;
             const char *name = ms->name;
+            char *text;
 
             if (pmLookupName(1, &name, &pmid) < 0)
                 continue;
             if (pmLookupDesc(pmid, &desc) < 0)
                 continue;
+
+            /* switch to PMI write context to register */
+            pmUseContext(arch_ctx);
             pmiAddMetric(name, pmid, desc.type, desc.indom,
                          desc.sem, desc.units);
+
+            /* write one-line and full help text from local context */
+            pmUseContext(ctx->ctx);
+            if (pmLookupText(pmid, PM_TEXT_ONELINE, &text) >= 0) {
+                pmUseContext(arch_ctx);
+                pmiPutText(PM_TEXT_PMID, PM_TEXT_ONELINE, pmid, text);
+                free(text);
+                pmUseContext(ctx->ctx);
+            }
+            if (pmLookupText(pmid, PM_TEXT_HELP, &text) >= 0) {
+                pmUseContext(arch_ctx);
+                pmiPutText(PM_TEXT_PMID, PM_TEXT_HELP, pmid, text);
+                free(text);
+                pmUseContext(ctx->ctx);
+            }
         }
     }
+
+    pmUseContext(arch_ctx);
+
+    /* allocate PMI handles for fast per-sample writes */
+    subsys_alloc_handles();
 
     return 0;
 }
@@ -200,6 +227,10 @@ archive_write(collectl_ctx *ctx)
     if (arch_ctx < 0)
         return;
 
+    /* stage all metric values using pre-allocated handles (fast path) */
+    subsys_archive_write(ctx);
+
+    /* commit the sample with a high-resolution timestamp */
     clock_gettime(CLOCK_REALTIME, &ts);
     pmiHighResWrite(ts.tv_sec, ts.tv_nsec);
 }

@@ -28,10 +28,12 @@ typedef struct {
     pmDesc          desc;
 } metric_slot;
 
-/* Instance cache entry */
+/* Instance cache entry — includes PMI archive handle */
 typedef struct {
-    int     inst;
-    char    name[64];
+    int         inst;
+    char        name[64];
+    pmiHandle   handles[MAX_TOTAL_METRICS]; /* one per slot referencing this indom */
+    unsigned int nhandles;
 } inst_cache_entry;
 
 /* Per-subsystem instance cache */
@@ -44,6 +46,10 @@ typedef struct {
 static pmID         all_pmids[MAX_TOTAL_METRICS];
 static metric_slot  all_slots[MAX_TOTAL_METRICS];
 static unsigned int n_all;
+
+/* PMI archive handles for aggregate (PM_INDOM_NULL) metrics: [slot] */
+static pmiHandle    agg_handles[MAX_TOTAL_METRICS];
+static int          agg_handles_valid;  /* 1 once archive is open */
 
 /* Previous sample values for rate calculation: [slot_idx][inst_idx] */
 static double       prev_vals[MAX_TOTAL_METRICS][MAX_INSTS];
@@ -121,8 +127,11 @@ subsys_fetch_all(collectl_ctx *ctx)
     if (n_all == 0)
         return 0;
 
-    if (pmFetch((int)n_all, all_pmids, &result) < 0)
-        return -1;
+    {
+        int fetch_sts = pmFetch((int)n_all, all_pmids, &result);
+        if (fetch_sts < 0)
+            return fetch_sts;   /* propagate PM_ERR_EOL for archive playback */
+    }
 
     clock_gettime(CLOCK_REALTIME, &now);
     elapsed = (now.tv_sec  - ctx->prev_ts.tv_sec) +
@@ -192,10 +201,27 @@ subsys_fetch_all(collectl_ctx *ctx)
                     char *iname = NULL;
                     if (pmNameInDom(sd->indom, vset->vlist[j].inst,
                                     &iname) == 0 && iname) {
-                        ic->entries[ic->n].inst = vset->vlist[j].inst;
-                        pmstrncpy(ic->entries[ic->n].name,
-                                  sizeof(ic->entries[ic->n].name), iname);
+                        unsigned int ne = ic->n;
+                        ic->entries[ne].inst = vset->vlist[j].inst;
+                        pmstrncpy(ic->entries[ne].name,
+                                  sizeof(ic->entries[ne].name), iname);
+                        ic->entries[ne].nhandles = 0;
                         free(iname);
+
+                        /* allocate a PMI handle for each slot that uses this indom */
+                        if (agg_handles_valid) {
+                            unsigned int sl;
+                            for (sl = 0; sl < n_all; sl++) {
+                                if (collectl_subsys[all_slots[sl].ss_idx].indom
+                                        == sd->indom) {
+                                    const metric_spec *ms2 =
+                                        &sd->metrics[all_slots[sl].m_idx];
+                                    pmiHandle h2 = pmiGetHandle(ms2->name,
+                                                       ic->entries[ne].name);
+                                    ic->entries[ne].handles[sl] = h2;
+                                }
+                            }
+                        }
                         ic->n++;
                     }
                 }
@@ -243,6 +269,96 @@ subsys_fetch(collectl_ctx *ctx, const subsys_def *sd,
 
     *ninst = max_ninst ? max_ninst : 1;
     return (int)*ninst;
+}
+
+/*
+ * Allocate PMI archive handles for all registered metrics.
+ * Called from archive_open() after pmiAddMetric() for each metric.
+ * Aggregate (PM_INDOM_NULL) handles are allocated immediately.
+ * Per-instance handles are allocated lazily on first instance encounter
+ * in subsys_fetch_all() — see inst_cache population below.
+ */
+void
+subsys_alloc_handles(void)
+{
+    unsigned int    slot;
+    const subsys_def  *sd;
+    const metric_spec *ms;
+
+    for (slot = 0; slot < n_all; slot++) {
+        sd = &collectl_subsys[all_slots[slot].ss_idx];
+        ms = &sd->metrics[all_slots[slot].m_idx];
+
+        if (sd->indom == PM_INDOM_NULL) {
+            agg_handles[slot] = pmiGetHandle(ms->name, "");
+        } else {
+            agg_handles[slot] = -1;  /* instanced: allocated lazily */
+        }
+    }
+    agg_handles_valid = 1;
+}
+
+/*
+ * Write all active subsystem metric values to the open PMI archive using
+ * pre-allocated pmiHandle values (fast path — no string lookups per sample).
+ * Called once per interval from archive_write() before pmiHighResWrite().
+ */
+void
+subsys_archive_write(collectl_ctx *ctx)
+{
+    unsigned int      slot, j, si, ninst;
+    pmAtomValue       atom;
+    const subsys_def *sd;
+    inst_cache       *ic;
+
+    (void)ctx;
+
+    if (!agg_handles_valid)
+        return;
+
+    for (slot = 0; slot < n_all; slot++) {
+        si    = all_slots[slot].ss_idx;
+        ninst = cur_ninst[slot];
+        sd    = &collectl_subsys[si];
+        ic    = (si < MAX_SUBSYS) ? &inst_caches[si] : NULL;
+
+        if (ninst == 0)
+            continue;
+
+        for (j = 0; j < ninst; j++) {
+            pmiHandle h;
+            double v = cur_vals[slot][j];
+
+            if (sd->indom == PM_INDOM_NULL) {
+                h = agg_handles[slot];
+            } else if (ic && j < ic->n) {
+                /* use per-instance handle allocated in subsys_fetch_all() */
+                h = ic->entries[j].handles[slot];
+            } else {
+                continue;
+            }
+
+            if (h < 0)
+                continue;
+
+            /* convert double back to native type for the atom */
+            switch (all_slots[slot].desc.type) {
+            case PM_TYPE_U32:
+                atom.ul  = (unsigned int)(unsigned long long)v;  break;
+            case PM_TYPE_32:
+                atom.l   = (int)(long long)v;                    break;
+            case PM_TYPE_U64:
+                atom.ull = (unsigned long long)v;                break;
+            case PM_TYPE_64:
+                atom.ll  = (long long)v;                         break;
+            case PM_TYPE_FLOAT:
+                atom.f   = (float)v;                             break;
+            default:
+                atom.d   = v;                                    break;
+            }
+            pmiPutAtomValueHandle(h, &atom);
+        }
+    }
 }
 
 void
@@ -301,4 +417,132 @@ subsys_output_verbose(const subsys_def *sd, double *vals,
             putchar('\n');
         }
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* colmux per-host fetch support                                        */
+/* ------------------------------------------------------------------ */
+
+unsigned int
+subsys_n_all(void)
+{
+    return n_all;
+}
+
+/*
+ * Initialise metric lookup for one remote host.  Uses the same all_pmids[]
+ * built by subsys_lookup() — assumes metric sets are consistent across hosts
+ * (same PCP version).  Switches to pcp_ctx to verify the pmids are valid.
+ */
+int
+subsys_mux_lookup(int pcp_ctx)
+{
+    int saved = pmWhichContext();
+    int sts   = 0;
+    unsigned int slot;
+    pmDesc desc;
+
+    pmUseContext(pcp_ctx);
+    for (slot = 0; slot < n_all; slot++) {
+        if (pmLookupDesc(all_pmids[slot], &desc) < 0) {
+            all_pmids[slot] = PM_ID_NULL;
+            sts = -1;
+        }
+    }
+    pmUseContext(saved);
+    return sts;
+}
+
+/*
+ * Fetch one interval for a single remote host into the caller-supplied
+ * vals[] array (length n_all).  Rate calculation is done against
+ * prev_vals[] using the elapsed time since prev_ts.
+ * Context must be set to pcp_ctx by the caller before this call.
+ */
+int
+subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
+                 double *prev_vals, struct timespec *prev_ts)
+{
+    pmResult     *result;
+    struct timespec now;
+    double        elapsed;
+    unsigned int  slot, j;
+    int           saved;
+
+    if (n_all == 0 || nvals < n_all)
+        return -1;
+
+    saved = pmWhichContext();
+    pmUseContext(pcp_ctx);
+
+    if (pmFetch((int)n_all, all_pmids, &result) < 0) {
+        pmUseContext(saved);
+        return -1;
+    }
+
+    clock_gettime(CLOCK_REALTIME, &now);
+    elapsed = (now.tv_sec  - prev_ts->tv_sec) +
+              (now.tv_nsec - prev_ts->tv_nsec) * 1e-9;
+    if (elapsed <= 0.0)
+        elapsed = 1.0;
+
+    /* initialise to nodata */
+    for (slot = 0; slot < n_all; slot++)
+        vals[slot] = -1.0;
+
+    for (j = 0; j < (unsigned int)result->numpmid; j++) {
+        pmValueSet *vset = result->vset[j];
+        unsigned int s;
+        pmAtomValue atom;
+        double raw;
+
+        for (s = 0; s < n_all; s++)
+            if (all_pmids[s] == vset->pmid)
+                break;
+        if (s >= n_all || vset->numval <= 0)
+            continue;
+
+        if (pmExtractValue(vset->valfmt, &vset->vlist[0],
+                           all_slots[s].desc.type,
+                           &atom, PM_TYPE_DOUBLE) < 0)
+            continue;
+        raw = atom.d;
+
+        /* average over instances for instanced metrics */
+        if (vset->numval > 1) {
+            unsigned int k;
+            double total = raw;
+            for (k = 1; k < (unsigned int)vset->numval; k++) {
+                if (pmExtractValue(vset->valfmt, &vset->vlist[k],
+                                   all_slots[s].desc.type,
+                                   &atom, PM_TYPE_DOUBLE) == 0)
+                    total += atom.d;
+            }
+            raw = total / vset->numval;
+        }
+
+        if (all_slots[s].desc.sem == PM_SEM_COUNTER && prev_vals) {
+            double prev = prev_vals[s];
+            vals[s] = (prev >= 0.0) ? (raw - prev) / elapsed : 0.0;
+            prev_vals[s] = raw;
+        } else {
+            vals[s] = raw;
+            if (prev_vals)
+                prev_vals[s] = raw;
+        }
+
+        /* apply scale factor from metric_spec */
+        {
+            const subsys_def  *sd = &collectl_subsys[all_slots[s].ss_idx];
+            const metric_spec *ms = &sd->metrics[all_slots[s].m_idx];
+            if (ms->scale != 0.0)
+                vals[s] *= ms->scale;
+        }
+    }
+
+    pmFreeResult(result);
+    *prev_ts = now;
+    pmUseContext(saved);
+    return 0;
+}
 }

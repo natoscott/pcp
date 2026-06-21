@@ -181,7 +181,7 @@ extract_date_from_name(const char *name, char *datebuf, size_t len)
 
     /* find last '-' before an 8-digit sequence */
     for (p = name; *p; p++) {
-        if (*p == '-' && p[1] >= '2' && p[1] <= '2') {
+        if (*p == '-' && p[1] >= '0' && p[1] <= '9') {
             /* candidate: check for 8 consecutive digits */
             const char *q = p + 1;
             int i;

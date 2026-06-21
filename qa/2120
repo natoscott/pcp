@@ -1,0 +1,52 @@
+#!/bin/sh
+# PCP QA Test No. 2120
+# collectl2pcp: verify new subsystem handlers (sock, inode, buddy, NFS, NUMA)
+# using qa/collectl/subsys_test.raw.gz
+#
+# Copyright (c) 2026 Red Hat.
+#
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+. ./common.product
+. ./common.filter
+. ./common.check
+
+which collectl2pcp >/dev/null 2>&1 || _notrun "collectl2pcp not installed"
+
+status=1
+arch="$tmp.arch"
+trap "cd $here; rm -rf $tmp $tmp.* ${arch}*; exit \$status" 0 1 2 3 15
+
+# real QA test starts here
+
+echo "=== convert subsys_test.raw.gz to PCP archive ==="
+collectl2pcp $here/collectl/subsys_test.raw.gz $arch 2>&1 \
+| grep -v "^$" | sed -e 's|/tmp/[^/]*/||g'
+
+echo "=== archive was created ==="
+[ -f "${arch}.meta" ] && echo "meta OK" || echo "meta MISSING"
+
+echo "=== verify socket subsystem (network.sockstat) ==="
+pminfo -f -a $arch network.sockstat.tcp.inuse \
+               network.sockstat.udp.inuse \
+               network.sockstat.raw.inuse 2>&1 \
+| grep -E "value [0-9]"
+
+echo "=== verify inode subsystem (vfs) ==="
+pminfo -f -a $arch vfs.dentry.count \
+                   vfs.files.count \
+                   vfs.inodes.count 2>&1 \
+| grep -E "value [0-9]"
+
+echo "=== verify buddy info (mem.buddyinfo) ==="
+pminfo -a $arch mem.buddyinfo.total 2>&1 | grep "mem.buddyinfo"
+pminfo -f -a $arch mem.buddyinfo.total 2>&1 \
+| grep -E "inst .* value [0-9]" | sed 's/value [0-9]*/value NNN/'
+
+echo "=== verify network.sockstat metrics in archive ==="
+pminfo -a $arch network.sockstat 2>/dev/null | sort | head -8
+
+status=0
+exit

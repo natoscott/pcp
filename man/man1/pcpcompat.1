@@ -16,7 +16,6 @@
 .TH PCPCOMPAT 1 "PCP" "Performance Co-Pilot"
 .SH NAME
 \f3PCPCompat\f1,
-\f3pcp-collectl\f1,
 \f3pmmgr\f1,
 \f3pmwebd\f1 \- backward-compatibility in the Performance Co-Pilot (PCP)
 .SH INTRODUCTION
@@ -155,34 +154,6 @@ require no additional daemons and are better integrated with the
 and
 .BR pmlogger
 service management used elsewhere in PCP.
-.SH PCP-COLLECTL
-The
-.B pcp-collectl
-utility has been superseded by
-.BR pmrep (1)
-from PCP v5 onward.
-.PP
-The equivalent of
-.B pcp-collectl
-subsystem reporting is achieved as follows:
-.TP
-.B pmrep :collectl-sc
-Processor subsystem view.
-.TP
-.B pmrep :collectl-sm
-Memory subsystem view.
-.TP
-.B pmrep :collectl-sd
-Aggregate disks view.
-.TP
-.B pmrep :collectl-sD
-Per-disk-device view.
-.TP
-.B pmrep :collectl-dm-sD
-Device mapper view.
-.TP
-.B pmrep :collectl-sn
-Network subsystem view.
 .SH PCP-WEBAPPS
 The stand-alone web applications packaged with older PCP versions
 have been superseded by

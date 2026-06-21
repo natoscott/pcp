@@ -17,6 +17,7 @@ PCP is a feature-rich, mature, extensible, cross-platform toolkit supporting bot
 * :doc:`PG/AboutProgrammersGuide`
 * :doc:`HowTos/nix/index`
 * :doc:`HowTos/scaling/index`
+* :doc:`HowTos/collectl/index`
 * `REST API Specification <api/>`_
 
 .. toctree::
@@ -30,6 +31,7 @@ PCP is a feature-rich, mature, extensible, cross-platform toolkit supporting bot
    PG/AboutProgrammersGuide
    HowTos/nix/index
    HowTos/scaling/index
+   HowTos/collectl/index
    REST API Specification <https://pcp.readthedocs.io/en/latest/api/index.html>
 
 .. toctree::

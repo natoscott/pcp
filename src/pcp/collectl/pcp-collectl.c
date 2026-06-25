@@ -96,8 +96,10 @@ parse_subsys(collectl_ctx *ctx, const char *spec)
         if (*p == '+') { add = 1; continue; }
         if (*p == '-') { add = 0; continue; }
         switch (*p) {
-        case 'c': case 'C': if (add) ctx->subsys |= (SS_CPU|SS_CPU_DETAIL);
-                            else     ctx->subsys &= ~(SS_CPU|SS_CPU_DETAIL); break;
+        case 'c': case 'C':
+		if (add) ctx->subsys |= (SS_CPU|SS_CPU_DETAIL);
+                else     ctx->subsys &= ~(SS_CPU|SS_CPU_DETAIL);
+		break;
         case 'd': if (add) ctx->subsys |= SS_DISK;    else ctx->subsys &= ~SS_DISK;    break;
         case 'D': if (add) ctx->subsys |= SS_DISK_DETAIL; else ctx->subsys &= ~SS_DISK_DETAIL; break;
         case 'm': if (add) ctx->subsys |= SS_MEMORY;  else ctx->subsys &= ~SS_MEMORY;  break;

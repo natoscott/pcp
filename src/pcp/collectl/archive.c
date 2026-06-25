@@ -15,10 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "import.h"
 #include "pcp-collectl.h"
 
 static int arch_ctx = -1;
@@ -26,14 +24,8 @@ static char arch_path[MAXPATHLEN];  /* current archive path */
 char arch_path_last[MAXPATHLEN];    /* path of most recently closed archive */
 
 /*
- * Write PCP_RUN_DIR/pmimport/collectl for pmdapmcd to serve as
- * pmcd.pmimport.{archive,version,args}.  Uses open()+fdopen() to
- * pin permissions to 0644 regardless of umask.
- */
-/*
- * Build a comma-separated list of active subsystem names from the
- * bitmask, e.g. "CPU,DISK,MEMORY,NET,SOCK" — matching the style of
- * sadc.activities so pcp-summary.sh can display it uniformly.
+ * Build a space-separated list of active subsystem names from the bitmask,
+ * e.g. "CPU DISK MEMORY NET SOCK" for pcp(1) to display via pmimport.args.
  */
 static void
 build_subsys_string(unsigned int subsys, char *buf, size_t len)
@@ -53,50 +45,9 @@ build_subsys_string(unsigned int subsys, char *buf, size_t len)
     }
 }
 
-static void
-write_pmimport_sidecar(collectl_ctx *ctx, const char *archive_path)
-{
-    char dir[MAXPATHLEN];
-    char sidecar[MAXPATHLEN];
-    const char *rundir;
-    int fd;
-    FILE *fp;
-
-    rundir = pmGetConfig("PCP_RUN_DIR");
-
-    pmsprintf(dir, sizeof(dir), "%s/pmimport", rundir);
-    mkdir(dir, 0755);
-
-    pmsprintf(sidecar, sizeof(sidecar), "%s/collectl", dir);
-    fd = open(sidecar, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (fd < 0)
-        return;
-    if ((fp = fdopen(fd, "w")) == NULL) {
-        close(fd);
-        return;
-    }
-    char subsys_str[64];
-    build_subsys_string(ctx->subsys, subsys_str, sizeof(subsys_str));
-    fprintf(fp, "version=%s\n", PCP_COLLECTL_VERSION);
-    fprintf(fp, "args=%s\n", subsys_str);
-    fprintf(fp, "archive=%s\n", archive_path);
-    fclose(fp);
-}
-
-static void
-remove_pmimport_sidecar(void)
-{
-    char sidecar[MAXPATHLEN];
-    const char *rundir;
-
-    rundir = pmGetConfig("PCP_RUN_DIR");
-    pmsprintf(sidecar, sizeof(sidecar), "%s/pmimport/collectl", rundir);
-    unlink(sidecar);
-}
-
 /*
- * Build archive path: <dir>/collectl/<hostname>/<YYYYMMDD>
- * If ctx->filename specifies a directory, use it; otherwise use
+ * Build archive path: <dir>/<hostname>-<YYYYMMDD>
+ * If ctx->filename is set use it as the directory; otherwise use
  * COLLECTL_LOG_PATH/collectl.
  */
 static void
@@ -114,7 +65,6 @@ build_archive_path(collectl_ctx *ctx, char *path, size_t len)
     dir = ctx->filename ? ctx->filename
                         : COLLECTL_LOG_PATH "/collectl";
 
-    /* ensure directory exists */
     mkdir(dir, 0755);
 
     pmsprintf(path, len, "%s/%s-%s", dir, hostname, datebuf);
@@ -124,6 +74,7 @@ int
 archive_open(collectl_ctx *ctx)
 {
     char path[MAXPATHLEN];
+    char subsys_str[128];
     unsigned int s, m;
     pmLabelSet *sets = NULL;
     int nsets, i, j, saved;
@@ -132,7 +83,7 @@ archive_open(collectl_ctx *ctx)
     pmstrncpy(arch_path, sizeof(arch_path), path);
 
     arch_ctx = pmiStart(path, PMI_APPEND);
-    if ((pmiUseContext(arch_ctx)) < 0) {
+    if (pmiUseContext(arch_ctx) < 0) {
         fprintf(stderr, "pcp-collectl: cannot open archive %s: %s\n",
                 path, pmiErrStr(arch_ctx));
         arch_ctx = -1;
@@ -167,7 +118,11 @@ archive_open(collectl_ctx *ctx)
         }
         pmFreeLabelSets(sets, nsets);
     }
-    write_pmimport_sidecar(ctx, arch_path);
+
+    /* register with pmdapmimport; pmiEnd() removes the sidecar automatically */
+    build_subsys_string(ctx->subsys, subsys_str, sizeof(subsys_str));
+    pmiSetImportProgram("collectl", PCP_COLLECTL_VERSION, subsys_str, arch_path);
+    pmiSetZoneinfo(NULL);
 
     /* register all active subsystem metrics using pmDescs from local context */
     saved = pmWhichContext();
@@ -189,12 +144,10 @@ archive_open(collectl_ctx *ctx)
             if (pmLookupDesc(pmid, &desc) < 0)
                 continue;
 
-            /* switch to PMI write context to register */
             pmUseContext(arch_ctx);
             pmiAddMetric(name, pmid, desc.type, desc.indom,
                          desc.sem, desc.units);
 
-            /* write one-line and full help text from local context */
             pmUseContext(ctx->ctx);
             if (pmLookupText(pmid, PM_TEXT_ONELINE, &text) >= 0) {
                 pmUseContext(arch_ctx);
@@ -227,12 +180,10 @@ archive_write(collectl_ctx *ctx)
     if (arch_ctx < 0)
         return;
 
-    /* stage all metric values using pre-allocated handles (fast path) */
     subsys_archive_write(ctx);
 
-    /* commit the sample with a high-resolution timestamp */
     clock_gettime(CLOCK_REALTIME, &ts);
-    pmiHighResWrite(ts.tv_sec, ts.tv_nsec);
+    pmiWrite((unsigned long long)ts.tv_sec, (unsigned int)ts.tv_nsec);
 }
 
 void
@@ -240,11 +191,9 @@ archive_close(collectl_ctx *ctx)
 {
     if (arch_ctx < 0)
         return;
-    pmiEnd();
+    pmiEnd();   /* also removes the pmimport sidecar */
     arch_ctx = -1;
-    /* save path so rotate_logs() knows what to compress */
     pmstrncpy(arch_path_last, sizeof(arch_path_last), arch_path);
     arch_path[0] = '\0';
-    remove_pmimport_sidecar();
     (void)ctx;
 }

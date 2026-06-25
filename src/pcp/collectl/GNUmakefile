@@ -22,7 +22,10 @@ COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c colmux-playback.
 
 HFILES = pcp-collectl.h pcp-colmux.h
 
-LLDLIBS = $(PCP_LIB) -lpcp_import -lm
+LLDLIBS = $(PCPLIB) -lpcp_archive -lpcp_import -lm
+
+COLLECTL_OBJECTS = $(CFILES:.c=.o)
+COLMUX_OBJECTS   = $(COLMUX_CFILES:.c=.o)
 
 # Parameterised paths injected at build time
 LCFLAGS += -DCOLLECTL_SYSCONF_PATH='"$(PCP_SYSCONF_DIR)"'
@@ -32,12 +35,13 @@ LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.10"'
 
 LDIRT = collectl.service collectl.conf
 
-COLMUX_OBJECTS = $(COLMUX_CFILES:.c=.o)
-
 default: $(CMDTARGETS) collectl.service collectl.conf
 
-pcp-colmux: $(COLMUX_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(PCP_LIB) -lpcp_import -lm
+pcp-collectl: $(COLLECTL_OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LLDLIBS)
+
+pcp-colmux: $(COLMUX_OBJECTS) subsys.o subsys_defs.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(PCPLIB) -lpcp_archive -lpcp_import -lm
 
 # .in -> final: substitute @PCP_*@ placeholders
 collectl.service: service/collectl.service.in

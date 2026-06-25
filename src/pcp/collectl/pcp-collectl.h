@@ -24,6 +24,8 @@
 #include "import.h"
 #include <regex.h>
 
+typedef int pmiHandle;  /* pmiGetHandle() return type alias for readability */
+
 /* ------------------------------------------------------------------ */
 /* Subsystem bitmask — one bit per collectl subsystem letter           */
 /* ------------------------------------------------------------------ */

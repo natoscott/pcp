@@ -63,9 +63,7 @@ int
 daemonise(collectl_ctx *ctx)
 {
     pid_t pid;
-    int fd, pfd;
-    char pidbuf[32];
-    FILE *fp;
+    int fd;
 
     (void)ctx;
 
@@ -97,16 +95,6 @@ daemonise(collectl_ctx *ctx)
         dup2(fd, STDERR_FILENO);
         if (fd > STDERR_FILENO)
             close(fd);
-    }
-
-    /* write PID file with explicit 0644 regardless of umask */
-    pfd = open(COLLECTL_PIDFILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (pfd >= 0 && (fp = fdopen(pfd, "w")) != NULL) {
-        snprintf(pidbuf, sizeof(pidbuf), "%ld\n", (long)getpid());
-        fputs(pidbuf, fp);
-        fclose(fp);
-    } else if (pfd >= 0) {
-        close(pfd);
     }
 
     return 0;

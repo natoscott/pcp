@@ -545,4 +545,3 @@ subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
     pmUseContext(saved);
     return 0;
 }
-}

@@ -102,7 +102,7 @@ assign_playback_paths(colmux_ctx *ctx)
         if (h->avail) {
             struct timespec origin = { 0, 0 };
             pmUseContext(h->ctx);
-            pmSetMode(PM_MODE_FORW, (const pmTimespec *)&origin, 0);
+            pmSetMode(PM_MODE_FORW, &origin, 0);
         }
     }
 

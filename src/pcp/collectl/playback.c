@@ -25,7 +25,7 @@ playback_loop(collectl_ctx *ctx)
         return 1;
     }
 
-    sts = pmSetMode(PM_MODE_FORW, (const pmTimespec *)&origin, 0);
+    sts = pmSetMode(PM_MODE_FORW, &origin, 0);
     if (sts < 0) {
         fprintf(stderr, "pcp-collectl: pmSetMode failed: %s\n",
                 pmErrStr(sts));

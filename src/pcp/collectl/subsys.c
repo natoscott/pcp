@@ -398,7 +398,7 @@ subsys_output_verbose(const subsys_def *sd, double *vals,
     if (sd->verbose_hdr)
         printf("%s\n", sd->verbose_hdr);
 
-    if (sd->indom == PM_INDOM_NULL || ninst <= 1) {
+    if (!(sd->metrics[0].flags & MSF_INSTANCED) || ninst <= 1) {
         printf("%-8s ", sd->label);
         for (m = 0; m < sd->nmetrics; m++) {
             const metric_spec *ms = &sd->metrics[m];
@@ -461,7 +461,7 @@ subsys_mux_lookup(int pcp_ctx)
  */
 int
 subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
-                 double *prev_vals, struct timespec *prev_ts)
+                 double *last_vals, struct timespec *last_ts)
 {
     pmResult     *result;
     struct timespec now;
@@ -481,8 +481,8 @@ subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
     }
 
     clock_gettime(CLOCK_REALTIME, &now);
-    elapsed = (now.tv_sec  - prev_ts->tv_sec) +
-              (now.tv_nsec - prev_ts->tv_nsec) * 1e-9;
+    elapsed = (now.tv_sec  - last_ts->tv_sec) +
+              (now.tv_nsec - last_ts->tv_nsec) * 1e-9;
     if (elapsed <= 0.0)
         elapsed = 1.0;
 
@@ -521,14 +521,14 @@ subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
             raw = total / vset->numval;
         }
 
-        if (all_slots[s].desc.sem == PM_SEM_COUNTER && prev_vals) {
-            double prev = prev_vals[s];
+        if (all_slots[s].desc.sem == PM_SEM_COUNTER && last_vals) {
+            double prev = last_vals[s];
             vals[s] = (prev >= 0.0) ? (raw - prev) / elapsed : 0.0;
-            prev_vals[s] = raw;
+            last_vals[s] = raw;
         } else {
             vals[s] = raw;
-            if (prev_vals)
-                prev_vals[s] = raw;
+            if (last_vals)
+                last_vals[s] = raw;
         }
 
         /* apply scale factor from metric_spec */
@@ -541,7 +541,7 @@ subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
     }
 
     pmFreeResult(result);
-    *prev_ts = now;
+    *last_ts = now;
     pmUseContext(saved);
     return 0;
 }

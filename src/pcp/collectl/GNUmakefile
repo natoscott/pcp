@@ -10,7 +10,9 @@
 TOPDIR = ../../..
 include $(TOPDIR)/src/include/builddefs
 
-CMDTARGETS = pcp-collectl pcp-colmux
+CMDTARGET = pcp-collectl
+MUXTARGET = pcp-colmux
+CMDTARGETS = $(CMDTARGET) $(MUXTARGET)
 
 CFILES = pcp-collectl.c \
 	 subsys.c subsys_defs.c \
@@ -22,26 +24,36 @@ COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c colmux-playback.
 
 HFILES = pcp-collectl.h pcp-colmux.h
 
-LLDLIBS = $(PCPLIB) -lpcp_archive -lpcp_import -lm
+LLDLIBS = $(PCPLIB) -lpcp_archive -lpcp_import $(LIB_FOR_MATH)
 
 COLLECTL_OBJECTS = $(CFILES:.c=.o)
 COLMUX_OBJECTS   = $(COLMUX_CFILES:.c=.o)
 
-# Parameterised paths injected at build time
 LCFLAGS += -DCOLLECTL_SYSCONF_PATH='"$(PCP_SYSCONF_DIR)"'
-LCFLAGS += -DCOLLECTL_RUN_PATH='"$(PCP_RUN_DIR)"'
 LCFLAGS += -DCOLLECTL_LOG_PATH='"$(PCP_LOG_DIR)"'
 LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.10"'
 
 LDIRT = collectl.service collectl.conf
 
+MAN_SECTION = 1
+MAN_PAGES = $(CMDTARGET).$(MAN_SECTION) $(MUXTARGET)..$(MAN_SECTION)
+MAN_DEST = $(PCP_MAN_DIR)/man$(MAN_SECTION)
 default: $(CMDTARGETS) collectl.service collectl.conf
 
-pcp-collectl: $(COLLECTL_OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LLDLIBS)
+include $(BUILDRULES)
 
-pcp-colmux: $(COLMUX_OBJECTS) subsys.o subsys_defs.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(PCPLIB) -lpcp_archive -lpcp_import -lm
+install: default
+	$(INSTALL) -m 755 pcp-collectl pcp-colmux $(PCP_BINADM_DIR)
+	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/collectl
+	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
+	$(INSTALL) -m 644 collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
+	$(INSTALL) -m 644 pcp-collectl.1 pcp-colmux.1 $(MANDEST)
+	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
+	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-colmux   $(PCP_BIN_DIR)/colmux
+
+default_pcp : default
+
+install_pcp : install
 
 # .in -> final: substitute @PCP_*@ placeholders
 collectl.service: service/collectl.service.in
@@ -56,17 +68,5 @@ collectl.conf: collectl.conf.in
 	    -e 's|@PCP_SYSCONF_DIR@|$(PCP_SYSCONF_DIR)|g' \
 	    $< > $@
 
-install: default
-	$(INSTALL) -m 755 pcp-collectl $(PCP_BINADM_DIR)/pcp-collectl
-	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/collectl
-	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
-	$(INSTALL) -m 644 collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
-	$(INSTALL) -m 644 man/pcp-collectl.1 $(PCP_MAN_DIR)/man1/pcp-collectl.1
-	$(INSTALL) -m 755 pcp-colmux $(PCP_BINADM_DIR)/pcp-colmux
-	$(INSTALL) -m 644 man/pcp-colmux.1 $(PCP_MAN_DIR)/man1/pcp-colmux.1
-	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
-	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-colmux   $(PCP_BIN_DIR)/colmux
-	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-collectl.1 $(PCP_MAN_DIR)/man1/collectl.1
-	$(INSTALL) -S $(PCP_MAN_DIR)/man1/pcp-colmux.1  $(PCP_MAN_DIR)/man1/colmux.1
-
-include $(BUILDRULES)
+check :: $(MAN_PAGES)
+	$(MANLINT) $^

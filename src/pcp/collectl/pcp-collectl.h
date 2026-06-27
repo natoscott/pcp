@@ -1,6 +1,6 @@
 /*
- * Copyright 2003-2018 Hewlett-Packard Development Company, L.P.
  * Copyright (c) 2026 Red Hat.
+ * Copyright 2003-2018 Hewlett-Packard Development Company, L.P.
  *
  * pcp-collectl - PCP-native C reimplementation of the Perl collectl utility.
  * Original collectl by Mark Seger (mjseger@gmail.com), HP.
@@ -173,7 +173,7 @@ void subsys_archive_write(collectl_ctx *ctx);
 extern unsigned int subsys_n_all(void);
 int  subsys_mux_lookup(int pcp_ctx);
 int  subsys_mux_fetch(int pcp_ctx, double *vals, unsigned int nvals,
-                      double *prev_vals, struct timespec *prev_ts);
+                      double *last_vals, struct timespec *last_ts);
 int  subsys_fetch(collectl_ctx *ctx, const subsys_def *sd,
                   double *vals, char **inst_names, unsigned int *ninst);
 void subsys_output_brief(const subsys_def *sd, double *vals,
@@ -216,11 +216,5 @@ int  socket_server(collectl_ctx *ctx);
 /* daemon.c — signal flags referenced by collect.c, playback.c, socket.c */
 extern volatile sig_atomic_t sigint_caught;
 extern volatile sig_atomic_t sigusr1_caught;
-
-/*
- * Config/pid paths — COLLECTL_SYSCONF_PATH and COLLECTL_RUN_PATH are
- * injected as -D compile flags by the GNUmakefile from builddefs variables.
- */
-#define COLLECTL_PIDFILE    COLLECTL_RUN_PATH "/collectl.pid"
 
 #endif /* PCP_COLLECTL_H */

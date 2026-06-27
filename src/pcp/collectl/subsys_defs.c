@@ -270,15 +270,31 @@ const subsys_def collectl_subsys[] = {
         cpu_metrics, sizeof(cpu_metrics)/sizeof(cpu_metrics[0]),
         PM_INDOM_NULL,
         "#Time       User%  Nice%   Sys%  Wait%   IRQ%  Soft%  Steal%  Guest%  Busy%",
-        "#Time CPU  User%  Nice%   Sys%  Wait%   IRQ%  Soft%  Steal%  Guest%  Busy%   MHz",
+        NULL,
         NULL /* compute: busy = 100 - idle, applied in subsys.c */
+    },
+    {
+        'C', 0, "CPU", SS_CPU_DETAIL,
+        cpu_detail_metrics, sizeof(cpu_detail_metrics)/sizeof(cpu_detail_metrics[0]),
+        PM_INDOM_NULL,
+        "#Time CPU  User%  Nice%   Sys%  Wait%   IRQ%  Soft%  Steal%  Guest%  Busy%   MHz",
+        NULL,
+        NULL
     },
     {
         'd', 'D', "DSK", SS_DISK,
         disk_metrics, sizeof(disk_metrics)/sizeof(disk_metrics[0]),
         PM_INDOM_NULL,
         "#Time       KBRead   KBWrit  Reads  Writes",
-        "#Time Disk    KBRead   KBWrit  Reads  Writes  RdMrg  WrMrg  Busy%",
+        NULL,
+        NULL
+    },
+    {
+        'D', 0, "DSK", SS_DISK_DETAIL,
+        disk_detail_metrics, sizeof(disk_detail_metrics)/sizeof(disk_detail_metrics[0]),
+        PM_INDOM_NULL,
+        "#Time Disk    KBRead   KBWrit  Busy%  Reads  Writes  RdMrg  WrMrg",
+        NULL,
         NULL
     },
     {
@@ -302,7 +318,15 @@ const subsys_def collectl_subsys[] = {
         net_metrics, sizeof(net_metrics)/sizeof(net_metrics[0]),
         PM_INDOM_NULL,
         "#Time       RxKB   TxKB  RxPkt  TxPkt  RxErr  TxErr  RxDrp  TxDrp",
+        NULL,
+        NULL
+    },
+    {
+        'N', 0, "NET", SS_NET_DETAIL,
+        net_detail_metrics, sizeof(net_detail_metrics)/sizeof(net_detail_metrics[0]),
+        PM_INDOM_NULL,
         "#Time Iface    RxKB   TxKB  RxPkt  TxPkt  RxErr  TxErr  RxDrp  TxDrp",
+        NULL,
         NULL
     },
     {
@@ -334,7 +358,15 @@ const subsys_def collectl_subsys[] = {
         irq_metrics, sizeof(irq_metrics)/sizeof(irq_metrics[0]),
         PM_INDOM_NULL,
         "#Time    Intrpts",
+        NULL,
+        NULL
+    },
+    {
+        'J', 0, "INT", SS_IRQ_DETAIL,
+        irq_detail_metrics, sizeof(irq_detail_metrics)/sizeof(irq_detail_metrics[0]),
+        PM_INDOM_NULL,
         "#Time CPU   Intrpts",
+        NULL,
         NULL
     },
     {
@@ -366,7 +398,15 @@ const subsys_def collectl_subsys[] = {
         tcp_metrics, sizeof(tcp_metrics)/sizeof(tcp_metrics[0]),
         PM_INDOM_NULL,
         "#Time  ActOpn PasOpn CurrEst Retrans  InErr OutRst",
+        NULL,
+        NULL
+    },
+    {
+        'T', 0, "TCP", SS_TCP_DETAIL,
+        tcp_detail_metrics, sizeof(tcp_detail_metrics)/sizeof(tcp_detail_metrics[0]),
+        PM_INDOM_NULL,
         "#Time  Estab SynSnt SynRcv FinW1 FinW2 TWait ClsWt Closng",
+        NULL,
         NULL
     },
     {
@@ -374,7 +414,15 @@ const subsys_def collectl_subsys[] = {
         nfs_metrics, sizeof(nfs_metrics)/sizeof(nfs_metrics[0]),
         PM_INDOM_NULL,
         "#Time  Calls V3Call V4Call",
+        NULL,
+        NULL
+    },
+    {
+        'F', 0, "NFS", SS_NFS_DETAIL,
+        nfs_detail_metrics, sizeof(nfs_detail_metrics)/sizeof(nfs_detail_metrics[0]),
+        PM_INDOM_NULL,
         "#Time  V2Calls V3Calls V4Calls SrvV2 SrvV3 SrvV4",
+        NULL,
         NULL
     },
     {

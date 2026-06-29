@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily collectl archive maintenance
+Documentation=man:pcp-collectl(1)
+
+[Timer]
+OnCalendar=daily
+
+[Install]
+WantedBy=timers.target

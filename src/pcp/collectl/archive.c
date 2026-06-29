@@ -14,9 +14,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include "pcp-collectl.h"
 
 static int arch_ctx = -1;
@@ -62,12 +65,44 @@ build_archive_path(collectl_ctx *ctx, char *path, size_t len)
     gethostname(hostname, sizeof(hostname));
     strftime(datebuf, sizeof(datebuf), "%Y%m%d", tm);
 
-    dir = ctx->filename ? ctx->filename
-                        : COLLECTL_LOG_PATH "/collectl";
+    dir = ctx->filename ? ctx->filename : COLLECTL_LOG_PATH;
 
     mkdir(dir, 0755);
 
     pmsprintf(path, len, "%s/%s-%s", dir, hostname, datebuf);
+}
+
+/*
+ * pmiSetVolumeSize callback: compress a completed data volume.
+ * Unlike other pmimport tools, pcp-collectl uses nanosleep for
+ * timing (no alarm/setitimer), so no inherited timer to cancel.
+ */
+static void
+volume_rotate_callback(const char *vol_path)
+{
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        execlp("zstd", "zstd", "-q", "--rm", vol_path, (char *)NULL);
+        _exit(1);
+    }
+}
+
+static size_t
+parse_volsize(const char *str)
+{
+    char *end;
+    size_t val;
+
+    if (str == NULL || *str == '\0')
+        return 0;
+    val = (size_t)strtoull(str, &end, 10);
+    switch (tolower((unsigned char)*end)) {
+    case 'g': val *= 1024; /* fall through */
+    case 'm': val *= 1024; /* fall through */
+    case 'k': val *= 1024; break;
+    }
+    return val;
 }
 
 int
@@ -82,7 +117,7 @@ archive_open(collectl_ctx *ctx)
     build_archive_path(ctx, path, sizeof(path));
     pmstrncpy(arch_path, sizeof(arch_path), path);
 
-    arch_ctx = pmiStart(path, PMI_APPEND);
+    arch_ctx = pmiStart(path, PMI_APPEND | PMI_PROCESS);
     if (pmiUseContext(arch_ctx) < 0) {
         fprintf(stderr, "pcp-collectl: cannot open archive %s: %s\n",
                 path, pmiErrStr(arch_ctx));
@@ -168,6 +203,13 @@ archive_open(collectl_ctx *ctx)
 
     /* allocate PMI handles for fast per-sample writes */
     subsys_alloc_handles();
+
+    /* enable intra-day volume rotation if LogVolSize is configured */
+    {
+        size_t volsize = parse_volsize(ctx->logvolsize);
+        if (volsize > 0)
+            pmiSetVolumeSize(volsize, volume_rotate_callback);
+    }
 
     return 0;
 }

@@ -30,23 +30,23 @@ COLLECTL_OBJECTS = $(CFILES:.c=.o)
 COLMUX_OBJECTS   = $(COLMUX_CFILES:.c=.o)
 
 LCFLAGS += -DCOLLECTL_SYSCONF_PATH='"$(PCP_SYSCONF_DIR)"'
-LCFLAGS += -DCOLLECTL_LOG_PATH='"$(PCP_LOG_DIR)"'
-LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.10"'
-
-LDIRT = collectl.service collectl.conf
+LCFLAGS += -DCOLLECTL_LOG_PATH='"/var/log/collectl"'
+LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.20"'
 
 MAN_SECTION = 1
 MAN_PAGES = $(CMDTARGET).$(MAN_SECTION) $(MUXTARGET)..$(MAN_SECTION)
 MAN_DEST = $(PCP_MAN_DIR)/man$(MAN_SECTION)
-default: $(CMDTARGETS) collectl.service collectl.conf
+default: $(CMDTARGETS)
 
 include $(BUILDRULES)
 
 install: default
 	$(INSTALL) -m 755 pcp-collectl pcp-colmux $(PCP_BINADM_DIR)
-	$(INSTALL) -m 755 -d $(PCP_SYSCONF_DIR)/collectl
-	$(INSTALL) -m 644 collectl.conf $(PCP_SYSCONF_DIR)/collectl/collectl.conf
-	$(INSTALL) -m 644 collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
+	$(INSTALL) -m 755 collectl-daily.sh $(PCP_BINADM_DIR)/collectl-daily
+	$(INSTALL) -m 644 collectl.conf $(PCP_ETC_DIR)/collectl.conf
+	$(INSTALL) -m 644 service/collectl.service $(PCP_SYSTEMDUNIT_DIR)/collectl.service
+	$(INSTALL) -m 644 service/collectl-daily.service $(PCP_SYSTEMDUNIT_DIR)/collectl-daily.service
+	$(INSTALL) -m 644 service/collectl-daily.timer $(PCP_SYSTEMDUNIT_DIR)/collectl-daily.timer
 	$(INSTALL) -m 644 pcp-collectl.1 pcp-colmux.1 $(MANDEST)
 	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
 	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-colmux   $(PCP_BIN_DIR)/colmux
@@ -54,19 +54,6 @@ install: default
 default_pcp : default
 
 install_pcp : install
-
-# .in -> final: substitute @PCP_*@ placeholders
-collectl.service: service/collectl.service.in
-	$(SED) \
-	    -e 's|@PCP_BINADM_DIR@|$(PCP_BINADM_DIR)|g' \
-	    -e 's|@PCP_RUN_DIR@|$(PCP_RUN_DIR)|g' \
-	    $< > $@
-
-collectl.conf: collectl.conf.in
-	$(SED) \
-	    -e 's|@PCP_LOG_DIR@|$(PCP_LOG_DIR)|g' \
-	    -e 's|@PCP_SYSCONF_DIR@|$(PCP_SYSCONF_DIR)|g' \
-	    $< > $@
 
 check :: $(MAN_PAGES)
 	$(MANLINT) $^

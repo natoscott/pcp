@@ -1,0 +1,16 @@
+[Unit]
+Description=Performance data collection via collectl
+Documentation=man:pcp-collectl(1)
+Requires=pmcd.service
+After=pmcd.service
+
+[Service]
+Type=simple
+ExecStartPre=collectl-daily
+ExecStart=collectl -D
+ExecReload=/bin/kill -USR1 $MAINPID
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+Also=collectl-daily.timer

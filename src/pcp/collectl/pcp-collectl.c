@@ -225,6 +225,8 @@ read_config(collectl_ctx *ctx, int daemon_mode,
                 }
             }
         }
+        else if (strcmp(key, "LogVolSize") == 0)
+            pmstrncpy(ctx->logvolsize, sizeof(ctx->logvolsize), val);
         else if (strcmp(key, "DiskFilter") == 0)
             filter_compile(&ctx->dskfilt, val);
     }

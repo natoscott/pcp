@@ -151,6 +151,9 @@ typedef struct {
     unsigned int    purge_months;   /* log file retention in months (default 12) */
     unsigned int    roll_mins;      /* sub-day interval in minutes (0 = daily) */
     time_t          next_roll;      /* epoch of next rotation */
+
+    /* Volume rotation (LogVolSize in collectl.conf) */
+    char            logvolsize[16]; /* e.g. "100m" */
 } collectl_ctx;
 
 /* ------------------------------------------------------------------ */

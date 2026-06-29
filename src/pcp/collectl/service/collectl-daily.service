@@ -1,0 +1,7 @@
+[Unit]
+Description=Daily collectl archive rotation and maintenance
+Documentation=man:pcp-collectl(1)
+
+[Service]
+Type=oneshot
+ExecStart=systemctl restart collectl.service

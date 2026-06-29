@@ -20,7 +20,10 @@ CFILES = pcp-collectl.c \
 	 daemon.c socket.c \
 	 filter.c archive.c output.c
 
-COLMUX_CFILES = colmux.c pdsh.c mux.c display.c colmux-socket.c colmux-playback.c
+COLMUX_CFILES = pcp-colmux.c \
+	pdsh.c mux.c display.c \
+	colmux-socket.c colmux-playback.c \
+	subsys.c subsys_defs.c
 
 HFILES = pcp-collectl.h pcp-colmux.h
 
@@ -29,16 +32,22 @@ LLDLIBS = $(PCPLIB) -lpcp_archive -lpcp_import $(LIB_FOR_MATH)
 COLLECTL_OBJECTS = $(CFILES:.c=.o)
 COLMUX_OBJECTS   = $(COLMUX_CFILES:.c=.o)
 
+LDIRT = $(COLMUX_OBJECTS) $(MUXTARGET)
+
 LCFLAGS += -DCOLLECTL_SYSCONF_PATH='"$(PCP_SYSCONF_DIR)"'
 LCFLAGS += -DCOLLECTL_LOG_PATH='"/var/log/collectl"'
 LCFLAGS += -DPCP_COLLECTL_VERSION='"4.3.20"'
 
 MAN_SECTION = 1
-MAN_PAGES = $(CMDTARGET).$(MAN_SECTION) $(MUXTARGET)..$(MAN_SECTION)
+MAN_PAGES = $(CMDTARGET).$(MAN_SECTION) $(MUXTARGET).$(MAN_SECTION)
 MAN_DEST = $(PCP_MAN_DIR)/man$(MAN_SECTION)
+
 default: $(CMDTARGETS)
 
 include $(BUILDRULES)
+
+$(MUXTARGET) : $(COLMUX_OBJECTS)
+	$(CCF) -o $(MUXTARGET) $(LDFLAGS) $(COLMUX_OBJECTS) $(LDLIBS)
 
 install: default
 	$(INSTALL) -m 755 pcp-collectl pcp-colmux $(PCP_BINADM_DIR)

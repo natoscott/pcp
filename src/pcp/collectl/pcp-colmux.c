@@ -178,7 +178,7 @@ parse_cols(colmux_ctx *ctx, const char *spec)
 static void
 parse_addresses(colmux_ctx *ctx, const char *spec)
 {
-    char expanded[COLMUX_MAX_HOSTS][256];
+    char expanded[COLMUX_MAX_HOSTS][COLMUX_HOSTNAMELEN];
     int n, i;
 
     n = pdsh_expand(spec, expanded, COLMUX_MAX_HOSTS);

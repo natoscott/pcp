@@ -20,6 +20,7 @@
 
 #define COLMUX_DEFAULT_PORT     2655
 #define COLMUX_MAX_HOSTS        256
+#define COLMUX_HOSTNAMELEN      256
 #define COLMUX_MAX_COLS         64
 #define COLMUX_DEFAULT_HOSTW    8
 #define COLMUX_DEFAULT_LINES    0       /* 0 = use terminal height */
@@ -95,7 +96,7 @@ typedef struct {
 /* ------------------------------------------------------------------ */
 
 /* pdsh.c */
-int  pdsh_expand(const char *spec, char hosts[][256], int maxhosts);
+int  pdsh_expand(const char *spec, char hosts[][COLMUX_HOSTNAMELEN], int maxhosts);
 
 /* mux.c */
 int  mux_connect_all(colmux_ctx *ctx);

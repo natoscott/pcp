@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include "pcp-colmux.h"
 
 #define MAX_RANGE   4096
@@ -25,9 +24,9 @@
  */
 static int
 expand_bracket(const char *prefix, const char *bracket, const char *suffix,
-               char hosts[][256], int start, int maxhosts)
+               char hosts[][COLMUX_HOSTNAMELEN], int start, int maxhosts)
 {
-    char buf[256];
+    char buf[COLMUX_HOSTNAMELEN];
     char *tok, *rest;
     int count = 0;
 
@@ -45,15 +44,15 @@ expand_bracket(const char *prefix, const char *bracket, const char *suffix,
             int pad = (int)(dash - tok);
             for (n = lo; n <= hi && start + count < maxhosts; n++, count++) {
                 if (pad > 1 && tok[0] == '0')
-                    snprintf(hosts[start + count], 256,
+                    pmsprintf(hosts[start + count], COLMUX_HOSTNAMELEN,
                              "%s%0*ld%s", prefix, pad, n, suffix);
                 else
-                    snprintf(hosts[start + count], 256,
+                    pmsprintf(hosts[start + count], COLMUX_HOSTNAMELEN,
                              "%s%ld%s", prefix, n, suffix);
             }
         } else {
             if (start + count < maxhosts) {
-                snprintf(hosts[start + count], 256,
+                pmsprintf(hosts[start + count], COLMUX_HOSTNAMELEN,
                          "%s%s%s", prefix, tok, suffix);
                 count++;
             }
@@ -67,16 +66,17 @@ expand_bracket(const char *prefix, const char *bracket, const char *suffix,
  * Returns count added to hosts[].
  */
 static int
-expand_one(const char *spec, char hosts[][256], int start, int maxhosts)
+expand_one(const char *spec, char hosts[][COLMUX_HOSTNAMELEN], int start,
+           int maxhosts)
 {
     const char *lb = strchr(spec, '[');
     const char *rb;
-    char prefix[128], bracket[256], suffix[128];
+    char prefix[128], bracket[COLMUX_HOSTNAMELEN], suffix[128];
 
     if (!lb) {
         /* simple hostname */
         if (start < maxhosts) {
-            pmstrncpy(hosts[start], 256, spec);
+            pmstrncpy(hosts[start], COLMUX_HOSTNAMELEN, spec);
             return 1;
         }
         return 0;
@@ -85,7 +85,7 @@ expand_one(const char *spec, char hosts[][256], int start, int maxhosts)
     rb = strchr(lb, ']');
     if (!rb) {
         if (start < maxhosts) {
-            pmstrncpy(hosts[start], 256, spec);
+            pmstrncpy(hosts[start], COLMUX_HOSTNAMELEN, spec);
             return 1;
         }
         return 0;
@@ -114,14 +114,14 @@ expand_one(const char *spec, char hosts[][256], int start, int maxhosts)
  * Returns number of hosts added.
  */
 int
-pdsh_expand(const char *spec, char hosts[][256], int maxhosts)
+pdsh_expand(const char *spec, char hosts[][COLMUX_HOSTNAMELEN], int maxhosts)
 {
     int total = 0;
 
     /* @filename: read hosts from file */
     if (spec[0] == '@') {
         FILE *fp = fopen(spec + 1, "r");
-        char line[256];
+        char line[COLMUX_HOSTNAMELEN];
         if (!fp) {
             fprintf(stderr, "pcp-colmux: cannot open host file: %s\n", spec + 1);
             return 0;
@@ -139,10 +139,8 @@ pdsh_expand(const char *spec, char hosts[][256], int maxhosts)
     /* comma-separated: split first, then expand each token */
     {
         char buf[4096];
-        char *tok, *rest;
 
         pmstrncpy(buf, sizeof(buf), spec);
-        rest = buf;
 
         /*
          * Must not split on commas INSIDE brackets, e.g. n[1,3,5].

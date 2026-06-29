@@ -33,19 +33,6 @@ terminal_height(void)
     return 24;
 }
 
-static int
-cmp_double_asc(const void *a, const void *b)
-{
-    const double *da = a, *db = b;
-    return (*da > *db) - (*da < *db);
-}
-
-static int
-cmp_double_desc(const void *a, const void *b)
-{
-    return cmp_double_asc(b, a);
-}
-
 /*
  * Print one row of multi-line sorted display.
  * Bold the sort column value.

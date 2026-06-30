@@ -42,9 +42,12 @@ MAN_SECTION = 1
 MAN_PAGES = $(CMDTARGET).$(MAN_SECTION) $(MUXTARGET).$(MAN_SECTION)
 MAN_DEST = $(PCP_MAN_DIR)/man$(MAN_SECTION)
 
-default: $(CMDTARGETS)
+default: build-me
 
 include $(BUILDRULES)
+
+ifeq "$(TARGET_OS)" "linux"
+build-me: $(CMDTARGETS)
 
 $(MUXTARGET) : $(COLMUX_OBJECTS)
 	$(CCF) -o $(MUXTARGET) $(LDFLAGS) $(COLMUX_OBJECTS) $(LDLIBS)
@@ -59,6 +62,10 @@ install: default
 	$(INSTALL) -m 644 pcp-collectl.1 pcp-colmux.1 $(MANDEST)
 	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-collectl $(PCP_BIN_DIR)/collectl
 	$(INSTALL) -S $(PCP_BINADM_DIR)/pcp-colmux   $(PCP_BIN_DIR)/colmux
+else
+build-me:
+install:
+endif
 
 default_pcp : default
 

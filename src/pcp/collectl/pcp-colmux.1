@@ -1,9 +1,6 @@
-.TH PCP-COLMUX 1 "JUNE 2026" LOCAL "pcp-colmux" -*- nroff -*-
+.TH PCP-COLMUX 1 "JUNE 2026" LOCAL "pcp-colmux"
 .SH NAME
-
-.B pcp-colmux
-- multiplex monitoring data from multiple systems running pcp-collectl
-
+pcp-colmux \- multiplex monitoring data from multiple systems running pcp-collectl
 .SH SYNOPSIS
 
 pcp-colmux [-command "pcp-collectl-switches... [-p filespec]]" [-address addr1[,addr2,...]|-addr filename] [-cols col1[,col2...]] | [-column num]
@@ -23,17 +20,17 @@ data. The second format is a single line display in which one or more distinct d
 source is displayed on the same line.  This latter format is never sorted, but rather positionally
 organized by the name of the system that generated it.
 
-Collectl will be then be executed, using any optional switches specified by -command, on each of the 
+Collectl will be then be executed, using any optional switches specified by -command, on each of the
 systems specified by -address OR read those addresses from a file it the target of that switch
 is a filename rather than a list of hosts OR on the local system if -address is not specified.
-See collectl for details of the various switches.  In some cases certain 
-collectl switches will not make sense in a colmux environment and if chosen will generate 
-an error.  Further, if hosts are specified with -address, they should be a individual addresses or 
-hostnames separated by commas.  In turn, any of them can be in what those familiar with 
+See collectl for details of the various switches.  In some cases certain
+collectl switches will not make sense in a colmux environment and if chosen will generate
+an error.  Further, if hosts are specified with -address, they should be a individual addresses or
+hostnames separated by commas.  In turn, any of them can be in what those familiar with
 pdsh would recognize as -w format.
 
 Colmux will then execute the collectl command, gather the results from all sources
-for a particular interval and display them one result per line, sorted by the specified 
+for a particular interval and display them one result per line, sorted by the specified
 column OR all on the same line in groups specified by -cols.  The number of lines
 displayed is set to the size of the terminal window by default, but can be changed
 using -lines.  The one exception is the use of -nosort which only applies to the playback
@@ -44,7 +41,7 @@ processing.
 
 Colmux will never modify the size of the terminal window so to see more or wider lines
 either expand the window or override the number of display lines and run it again.  If
-the number display lines is set greater then the terminal height or 0, colmux will no 
+the number display lines is set greater then the terminal height or 0, colmux will no
 longer overlay the previous window and simply run in a continuous scrolling mode.
 
 Common Switches
@@ -61,9 +58,9 @@ those specified with the -username switch.  rsh access is not supported.
 
 .B "-command switches"
 .RS
-One can specify virtually any collectl command here, both in real-time or playback 
+One can specify virtually any collectl command here, both in real-time or playback
 mode.  Some switches may only be used during one mode or the other and colmux will
-usually let you know if you specify an invalid combination or an otherwise 
+usually let you know if you specify an invalid combination or an otherwise
 restricted switch.  Only those directly affecting colmux are listed below:
 
 .B "--from, --thru"
@@ -75,10 +72,10 @@ from and thru times with the --from switch if you separate then with a hyphen.
 .B "-o time-format"
 .RS
 This is a "magic" switch in that it not only tells collectl how to display dates/times
-(no other options are permitted using -o other than those from the set [dDTm]), it 
+(no other options are permitted using -o other than those from the set [dDTm]), it
 also tells colmux how to display dates/times too.
 
-In single line mode, the timestamp will either come from the host system in 
+In single line mode, the timestamp will either come from the host system in
 real-time mode OR the first host when run in playback mode.  This is the most common
 use/need for this switch.  But be careful in choosing column numbers with -cols as
 the position of the data shifts by 1 when time is included and by 2 if date and time
@@ -88,19 +85,19 @@ are.  Using -test will correctly show the shifted positions but only if you incl
 In real-time/top mode this switch is not allowed since colmux simply
 reports the current time of the system it is running on.
 
-When playing back data multi-line formatted data from one or more files, 
+When playing back data multi-line formatted data from one or more files,
 a timestamp for each interval is reported, consisting of the time of that
-interval.  When this switch is included, each line will be tagged with an 
+interval.  When this switch is included, each line will be tagged with an
 appropriate timestamp since on rare occasions they may not necessarily all be identical.
 .RE
 
 .B "-p playback-file"
 .RS
-This switch tells colmux to run in playback mode.  The filename should include the 
+This switch tells colmux to run in playback mode.  The filename should include the
 directory location and is usually specified with wild cards, limiting the selected
 file(s) to a specific date.  When those files are on the same host (-address is not
-specified), they may be for multiple hosts, but when the files are on remote hosts 
-they must all be for be that unique host.  If the file specification includes the 
+specified), they may be for multiple hosts, but when the files are on remote hosts
+they must all be for be that unique host.  If the file specification includes the
 string TODAY or YESTERDAY they will be replaced with *yyyymmdd* for that date.
 .RE
 
@@ -232,7 +229,7 @@ eliminating the need to manually count them and find the one you want.
 .RS
 Set the sort column to this number.  The column numbering is determined by the columns returned
 by collectl for the requested command.  Since date/time columns are optional for non-plot data,
-their inclusion will change the numbering of the columns so if you are not sure you selected the 
+their inclusion will change the numbering of the columns so if you are not sure you selected the
 correct column, you should first execute your command with -test included.
 
 You can also change the column number interactively
@@ -247,7 +244,7 @@ output to a script for further processing.  However, if you do this you
 can't read the final line with a routine that expects a terminating CR,
 like python's readline().  Rather, that last line and the one that follows
 will be returned as one long string.  This switch tell colmux to insert that
-final CR, which WILL mess up the screen under normal operations, so be 
+final CR, which WILL mess up the screen under normal operations, so be
 forewarned.
 .RE
 
@@ -272,7 +269,7 @@ file and you do not want the associated escape sequences to be written to it.
 .RS
 Reverse the default sort order.  You can also change the direction of the sort interactively
 with the UP/DOWN arrow keys IF the ReadKey module is installed (see colmux -version)
- OR simply type the r key and <ENTER>.  
+ OR simply type the r key and <ENTER>.
 .RE
 
 .B "-zero"
@@ -350,7 +347,7 @@ incorrect values to be reported as negative numbers and those values are also re
 .B "-age number"
 .RS
 When initially starting up and all hosts have not yet reported any data, colmux will display
-a -1 to indicate no data has been seen yet.  If during processing a host fails to report 
+a -1 to indicate no data has been seen yet.  If during processing a host fails to report
 in -age intervals, the default is 2, colmux will also report a -1 indicating the data is
 stale.
 .RE
@@ -376,7 +373,7 @@ though are also worth using on appropriate occasions.
 .RS
 This switch is for generating diagnostic information at various levels.  It is actually a
 bit mask, whose values are listed in the beginning on colmux itself. Perhaps the most useful
-value is 1 as it will cause colmux to display all the remote commands issues to each host in 
+value is 1 as it will cause colmux to display all the remote commands issues to each host in
 the address list and can often reveal problems when things don't seem to be working correctly
 .RE
 
@@ -420,7 +417,7 @@ Naturally that copy must exist in that location on all systems.
 .B "-keepalive secs"
 .RS
 Colmux uses ssh to start collectl on each remote machine and then communications between collectl
-and colmux occur over a socket.  Normally, ssh is configured to timeout after an interval of 
+and colmux occur over a socket.  Normally, ssh is configured to timeout after an interval of
 inactivity, such as 30 minutes, which means a long-running colmux session will begin to lose
 connections when this interval is reached.  By specifying a keepalive interval, you're telling
 the ssh to send a periodic keepalive to the other end so that connection doesn't get dropped.
@@ -468,7 +465,7 @@ All files on a remote host must be for that host only
 Run collectl on 3 nodes, showing CPU, Disk and Network statistics once a second and
 sorted by column 1, which happens to be total cpu.
 
-.B "colmux -addr abc,def,xyz
+.B "colmux -addr abc,def,xyz"
 
 Dynamically display top processes on nodes n1-n10 of a cluster once a second,
 sorted by column 5.
@@ -484,7 +481,7 @@ logs into /var/log/collectl on the local host and play them back from there.
 Look at the amount of mapped and slab memory consumed on nodes n1-n10 and n15 in
 real-time, every 2 seconds using single-line format.  Include totals and preface
 each line with the time.  Since memory sizes tend to be rather large, divide each
-by 1024 so we see MB rather than KB.  Note that the columns numbers are always 
+by 1024 so we see MB rather than KB.  Note that the columns numbers are always
 displayed are ascending order regardless of their order in -cols. To be sure, first
 test the column numbers.
 
@@ -494,17 +491,17 @@ test the column numbers.
 
 Display most active disks, based on KB written, on nodes n1, n4 and n5.
 
-.B "colmux -addr n1,n4,n5 -command ""-sD"" -column 6
+.B "colmux -addr n1,n4,n5 -command ""-sD"" -column 6"
 
 Here is a cool trick.  Collectl currently lets you look at top processes with the --top switch
 and even choose a sort column by name.  However, if you want to change the column you need to
-exit, then rerun collectl with a different sort column name.  But if you run it like this 
-example, you get the power of colmux to dynamically change the sort columns with the arrow 
+exit, then rerun collectl with a different sort column name.  But if you run it like this
+example, you get the power of colmux to dynamically change the sort columns with the arrow
 keys!  You can also use this technique to have collectl dynamically sort any local multi-line
 data such as slabs or even detail data like CPU, Disk, Lustre and Networks too!  Naturally this
 technique works just as well with playing back data as well.
 
-.B "colmux -command ""-sZ -i:1""
+.B "colmux -command ""-sZ -i:1"""
 
 .SH RESTRICTIONS
 
@@ -521,9 +518,9 @@ it to show the remote collectl startup command.  When there is a communications 
 will typically see 'connection timed out' messages displayed.
 
 There are actually a couple of possibilities here, one of which is a firewall is preventing
-connections and the easiest way to test this is run collectl on the local machine like this: 
+connections and the easiest way to test this is run collectl on the local machine like this:
 collectl -Aserver.  This tells collectl run as a server, listening for connections just
-like colmux.  Then log into a remote machine and run 
+like colmux.  Then log into a remote machine and run
 /usr/share/collectl/util/client.pl addr-of-server which tells
 client.pl to open a socket to that copy of collectl.  It should fail just like when it was
 run via colmux, so  try opening the firewall and try it again.  If it fixes the problem,

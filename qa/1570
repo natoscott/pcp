@@ -22,6 +22,25 @@ do
 	args="$args $try"
     fi
 done
+if [ -z "$args" ]
+then
+    # None of the options were accepted ... either zstd(1) is really old,
+    # or (as has been seen in CI when a zstd package was only partially
+    # updated) zstd(1) is installed but broken.
+    # Either way the rest of this test cannot produce stable output, so
+    # bail out with a useful reason instead of an invalid sed(1) script
+    # ("s// ARGS/") and a huge output mismatch.
+    #
+    zstd -c $tmp.try >/dev/null 2>&1
+    sts=$?
+    rm -f $tmp.try
+    if [ $sts -eq 0 ]
+    then
+	_notrun "zstd(1) does not support --rm, --quiet or --no-progress"
+    else
+	_notrun "zstd(1) is installed but broken: `zstd --version 2>&1 | head -1`"
+    fi
+fi
 rm -f $tmp.try
 
 status=1	# failure is the default!
